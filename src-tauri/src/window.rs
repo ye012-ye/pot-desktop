@@ -242,13 +242,16 @@ pub fn inline_translate() {
     use selection::get_text;
 
     let text = get_text();
+    log::info!("inline_translate called, text length: {}", text.len());
     if text.trim().is_empty() {
+        log::info!("inline_translate: empty text, returning");
         return;
     }
     // Don't write to state — the frontend useEffect reads state and would
     // re-trigger handleNewText without the [INLINE_TRANSLATE] prefix.
     let window = translate_window();
     let event_text = format!("[INLINE_TRANSLATE]{}", text);
+    log::info!("inline_translate: emitting event to translate window");
     window.emit("new_text", event_text).unwrap();
 }
 

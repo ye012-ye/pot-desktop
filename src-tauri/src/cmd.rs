@@ -234,6 +234,7 @@ pub fn inline_paste(text: String) -> Result<(), Error> {
     use std::thread;
     use std::time::Duration;
 
+    log::info!("inline_paste: received text length: {}", text.len());
     // Save original clipboard text (if any)
     let mut old_clipboard: Option<String> = None;
     if let Ok(mut clipboard) = Clipboard::new() {

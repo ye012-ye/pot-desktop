@@ -133,10 +133,6 @@ fn translate_window() -> Window {
         }
     };
     let (window, exists) = build_window("translate", "Translate");
-    if exists {
-        return window;
-    }
-    window.set_skip_taskbar(true).unwrap();
     // Get Translate Window Size
     let width = match get("translate_window_width") {
         Some(v) => v.as_i64().unwrap(),
@@ -155,13 +151,25 @@ fn translate_window() -> Window {
 
     let monitor = window.current_monitor().unwrap().unwrap();
     let dpi = monitor.scale_factor();
-
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (width as f64) * dpi,
-            (height as f64) * dpi,
-        ))
-        .unwrap();
+    if !exists {
+        window.set_skip_taskbar(true).unwrap();
+        window
+            .set_size(tauri::PhysicalSize::new(
+                (width as f64) * dpi,
+                (height as f64) * dpi,
+            ))
+            .unwrap();
+    } else {
+        let size = window.outer_size().unwrap();
+        if size.width < 100 || size.height < 100 {
+            window
+                .set_size(tauri::PhysicalSize::new(
+                    (width as f64) * dpi,
+                    (height as f64) * dpi,
+                ))
+                .unwrap();
+        }
+    }
 
     let position_type = match get("translate_window_position") {
         Some(v) => v.as_str().unwrap().to_string(),
@@ -247,6 +255,7 @@ pub fn inline_translate() {
         log::info!("inline_translate: empty text, returning");
         return;
     }
+    let event_text = format!("[INLINE_TRANSLATE]{}", text);
     // Get or create a hidden translate window for processing — must NOT
     // focus or show it, otherwise the paste goes to Pot instead of the
     // original application.
@@ -254,20 +263,34 @@ pub fn inline_translate() {
     let window = match app_handle.get_window("translate") {
         Some(w) => w,
         None => {
-            // Create silently: no focus, no show, minimal size
-            tauri::WindowBuilder::new(app_handle, "translate", tauri::WindowUrl::App("index.html".into()))
-                .visible(false)
-                .focused(false)
-                .transparent(true)
-                .decorations(false)
-                .inner_size(1.0, 1.0)
-                .skip_taskbar(true)
-                .additional_browser_args("--disable-web-security")
-                .build()
-                .unwrap()
+            let state: tauri::State<StringWrapper> = app_handle.state();
+            state.0.lock().unwrap().replace_range(.., &event_text);
+            let width = match get("translate_window_width") {
+                Some(v) => v.as_i64().unwrap(),
+                None => 350,
+            };
+            let height = match get("translate_window_height") {
+                Some(v) => v.as_i64().unwrap(),
+                None => 420,
+            };
+            // Create silently: no focus and no show. Use the normal translate
+            // size because this window is later reused by selection translate.
+            tauri::WindowBuilder::new(
+                app_handle,
+                "translate",
+                tauri::WindowUrl::App("index.html".into()),
+            )
+            .visible(false)
+            .focused(false)
+            .transparent(true)
+            .decorations(false)
+            .inner_size(width as f64, height as f64)
+            .skip_taskbar(true)
+            .additional_browser_args("--disable-web-security")
+            .build()
+            .unwrap()
         }
     };
-    let event_text = format!("[INLINE_TRANSLATE]{}", text);
     log::info!("inline_translate: emitting event to translate window");
     window.emit("new_text", event_text).unwrap();
 }

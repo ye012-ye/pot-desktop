@@ -197,7 +197,7 @@ export default function TargetArea(props) {
                         if (translateID[index] !== id) return;
                         setResult(typeof v === 'string' ? v.trim() : v);
                         setIsLoading(false);
-                        if (inlineTranslate) {
+                        if (inlineTranslate && index === 0) {
                             setInlineTranslate(false);
                             const resultText = typeof v === 'string' ? v.trim() : v;
                             if (resultText) {
@@ -245,10 +245,16 @@ export default function TargetArea(props) {
                         if (translateID[index] !== id) return;
                         setError(e.toString());
                         setIsLoading(false);
+                        if (inlineTranslate && index === 0) {
+                            setInlineTranslate(false);
+                        }
                     }
                 );
             } else {
                 setError('Language not supported');
+                if (inlineTranslate && index === 0) {
+                    setInlineTranslate(false);
+                }
             }
         } else {
             const LanguageEnum = builtinServices[translateServiceName].Language;
@@ -277,7 +283,7 @@ export default function TargetArea(props) {
                             if (translateID[index] !== id) return;
                             setResult(typeof v === 'string' ? v.trim() : v);
                             setIsLoading(false);
-                            if (inlineTranslate) {
+                            if (inlineTranslate && index === 0) {
                                 setInlineTranslate(false);
                                 const resultText = typeof v === 'string' ? v.trim() : v;
                                 if (resultText) {
@@ -325,10 +331,16 @@ export default function TargetArea(props) {
                             if (translateID[index] !== id) return;
                             setError(e.toString());
                             setIsLoading(false);
+                            if (inlineTranslate && index === 0) {
+                                setInlineTranslate(false);
+                            }
                         }
                     );
             } else {
                 setError('Language not supported');
+                if (inlineTranslate && index === 0) {
+                    setInlineTranslate(false);
+                }
             }
         }
     };

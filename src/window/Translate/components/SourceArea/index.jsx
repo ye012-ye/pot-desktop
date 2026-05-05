@@ -49,6 +49,7 @@ export default function SourceArea(props) {
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
     const textAreaRef = useRef();
+    const lastInlineTranslateRef = useRef(false);
     const speak = useVoice();
 
     const handleNewText = async (text) => {
@@ -161,6 +162,7 @@ export default function SourceArea(props) {
             setWindowType('[SELECTION_TRANSLATE]');
             if (isInline) {
                 setInlineTranslate(true);
+                lastInlineTranslateRef.current = true;
             }
             let newText = text.trim();
             if (deleteNewline) {
@@ -168,12 +170,15 @@ export default function SourceArea(props) {
             } else {
                 newText = text.trim();
             }
-            if (incrementalTranslate) {
+            if (incrementalTranslate && !isInline && !lastInlineTranslateRef.current) {
                 setSourceText((old) => {
                     return old + ' ' + newText;
                 });
             } else {
                 setSourceText(newText);
+            }
+            if (!isInline) {
+                lastInlineTranslateRef.current = false;
             }
             detect_language(newText).then(() => {
                 syncSourceText();
@@ -235,8 +240,11 @@ export default function SourceArea(props) {
                 });
             }
             unlisten = listen('new_text', (event) => {
-                appWindow.setFocus();
-                handleNewText(event.payload);
+                const text = event.payload ?? '';
+                if (!text.startsWith('[INLINE_TRANSLATE]')) {
+                    appWindow.setFocus();
+                }
+                handleNewText(text);
             });
         }
     }, [hideWindow]);

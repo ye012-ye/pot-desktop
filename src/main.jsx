@@ -6,6 +6,7 @@ import React from 'react';
 
 import { initStore } from './utils/store';
 import { initEnv } from './utils/env';
+import { warmupOllama } from './utils/ollama_warmup';
 import App from './App';
 
 if (import.meta.env.PROD) {
@@ -16,6 +17,7 @@ if (import.meta.env.PROD) {
 
 initStore().then(async () => {
     await initEnv();
+    warmupOllama(); // fire-and-forget, don't await
     const rootElement = document.getElementById('root');
     const root = ReactDOM.createRoot(rootElement);
     root.render(

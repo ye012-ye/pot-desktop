@@ -247,9 +247,26 @@ pub fn inline_translate() {
         log::info!("inline_translate: empty text, returning");
         return;
     }
-    // Don't write to state — the frontend useEffect reads state and would
-    // re-trigger handleNewText without the [INLINE_TRANSLATE] prefix.
-    let window = translate_window();
+    // Get or create a hidden translate window for processing — must NOT
+    // focus or show it, otherwise the paste goes to Pot instead of the
+    // original application.
+    let app_handle = APP.get().unwrap();
+    let window = match app_handle.get_window("translate") {
+        Some(w) => w,
+        None => {
+            // Create silently: no focus, no show, minimal size
+            tauri::WindowBuilder::new(app_handle, "translate", tauri::WindowUrl::App("index.html".into()))
+                .visible(false)
+                .focused(false)
+                .transparent(true)
+                .decorations(false)
+                .inner_size(1.0, 1.0)
+                .skip_taskbar(true)
+                .additional_browser_args("--disable-web-security")
+                .build()
+                .unwrap()
+        }
+    };
     let event_text = format!("[INLINE_TRANSLATE]{}", text);
     log::info!("inline_translate: emitting event to translate window");
     window.emit("new_text", event_text).unwrap();

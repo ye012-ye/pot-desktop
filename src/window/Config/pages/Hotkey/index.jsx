@@ -50,6 +50,7 @@ export default function Hotkey() {
     const [inputTranslate, setInputTranslate] = useConfig('hotkey_input_translate', '');
     const [ocrRecognize, setOcrRecognize] = useConfig('hotkey_ocr_recognize', '');
     const [ocrTranslate, setOcrTranslate] = useConfig('hotkey_ocr_translate', '');
+    const [inlineTranslate, setInlineTranslate] = useConfig('hotkey_inline_translate', '');
 
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
@@ -233,6 +234,37 @@ export default function Hotkey() {
                                     className={`${ocrTranslate === '' && 'hidden'}`}
                                     onPress={() => {
                                         registerHandler('hotkey_ocr_translate', ocrTranslate);
+                                    }}
+                                >
+                                    {t('common.ok')}
+                                </Button>
+                            }
+                        />
+                    )}
+                </div>
+                <div className='config-item'>
+                    <h3 className='my-auto'>{t('config.hotkey.inline_translate')}</h3>
+                    {inlineTranslate !== null && (
+                        <Input
+                            type='hotkey'
+                            variant='bordered'
+                            value={inlineTranslate}
+                            label={t('config.hotkey.set_hotkey')}
+                            className='max-w-[50%]'
+                            onKeyDown={(e) => {
+                                keyDown(e, setInlineTranslate);
+                            }}
+                            onFocus={() => {
+                                unregister(inlineTranslate);
+                                setInlineTranslate('');
+                            }}
+                            endContent={
+                                <Button
+                                    size='sm'
+                                    variant='flat'
+                                    className={`${inlineTranslate === '' && 'hidden'}`}
+                                    onPress={() => {
+                                        registerHandler('hotkey_inline_translate', inlineTranslate);
                                     }}
                                 >
                                     {t('common.ok')}

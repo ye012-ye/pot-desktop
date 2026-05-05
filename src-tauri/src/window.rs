@@ -245,10 +245,8 @@ pub fn inline_translate() {
     if text.trim().is_empty() {
         return;
     }
-    let app_handle = APP.get().unwrap();
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state.0.lock().unwrap().replace_range(.., &text);
-
+    // Don't write to state — the frontend useEffect reads state and would
+    // re-trigger handleNewText without the [INLINE_TRANSLATE] prefix.
     let window = translate_window();
     let event_text = format!("[INLINE_TRANSLATE]{}", text);
     window.emit("new_text", event_text).unwrap();

@@ -59,9 +59,11 @@ export default function SourceArea(props) {
             isInline = true;
             text = text.substring('[INLINE_TRANSLATE]'.length).trim();
         }
-        if (hideWindow) {
+        if (isInline) {
             appWindow.hide();
-        } else if (!isInline) {
+        } else if (hideWindow) {
+            appWindow.hide();
+        } else {
             appWindow.show();
             appWindow.setFocus();
         }

@@ -234,12 +234,10 @@ pub fn inline_paste(text: String) -> Result<(), Error> {
     use std::thread;
     use std::time::Duration;
 
-    // Save original clipboard
-    let mut old_clipboard = String::new();
+    // Save original clipboard text (if any)
+    let mut old_clipboard: Option<String> = None;
     if let Ok(mut clipboard) = Clipboard::new() {
-        if let Ok(old) = clipboard.get_text() {
-            old_clipboard = old;
-        }
+        old_clipboard = clipboard.get_text().ok();
         let _ = clipboard.set_text(&text);
     }
 
@@ -268,10 +266,12 @@ pub fn inline_paste(text: String) -> Result<(), Error> {
         .key(paste_key, Release)
         .map_err(|e| Error::Error(Box::new(e)))?;
 
-    // Restore original clipboard after paste
+    // Restore original clipboard after paste (only if we saved text)
     thread::sleep(Duration::from_millis(200));
-    if let Ok(mut clipboard) = Clipboard::new() {
-        let _ = clipboard.set_text(&old_clipboard);
+    if let Some(old) = old_clipboard {
+        if let Ok(mut clipboard) = Clipboard::new() {
+            let _ = clipboard.set_text(&old);
+        }
     }
 
     Ok(())

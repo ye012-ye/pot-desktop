@@ -53,6 +53,9 @@ export default function SourceArea(props) {
 
     const handleNewText = async (text) => {
         text = text.trim();
+        // Ignore empty text from get_text useEffect — prevents
+        // clearing inline translate text before translation completes
+        if (!text) return;
         // Check for inline translate marker - don't show window
         let isInline = false;
         if (text.startsWith('[INLINE_TRANSLATE]')) {

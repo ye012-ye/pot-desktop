@@ -16,6 +16,7 @@ import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import { sendNotification } from '@tauri-apps/api/notification';
 import React, { useEffect, useState, useRef } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
+import { invoke } from '@tauri-apps/api';
 import PulseLoader from 'react-spinners/PulseLoader';
 import { TbTransformFilled } from 'react-icons/tb';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
@@ -26,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 import Database from 'tauri-plugin-sql-api';
 import { GiCycle } from 'react-icons/gi';
 import { useTheme } from 'next-themes';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { nanoid } from 'nanoid';
 import { useSpring, animated } from '@react-spring/web';
 import useMeasure from 'react-use-measure';
@@ -34,7 +35,7 @@ import useMeasure from 'react-use-measure';
 import * as builtinCollectionServices from '../../../../services/collection';
 import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
-import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
+import { sourceTextAtom, detectLanguageAtom, inlineTranslateAtom } from '../SourceArea';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
 import * as builtinTtsServices from '../../../../services/tts';
@@ -79,6 +80,8 @@ export default function TargetArea(props) {
     const [clipboardMonitor] = useConfig('clipboard_monitor', false);
 
     const detectLanguage = useAtomValue(detectLanguageAtom);
+    const inlineTranslate = useAtomValue(inlineTranslateAtom);
+    const setInlineTranslate = useSetAtom(inlineTranslateAtom);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
     const textAreaRef = useRef();
@@ -194,6 +197,13 @@ export default function TargetArea(props) {
                         if (translateID[index] !== id) return;
                         setResult(typeof v === 'string' ? v.trim() : v);
                         setIsLoading(false);
+                        if (inlineTranslate) {
+                            setInlineTranslate(false);
+                            const resultText = typeof v === 'string' ? v.trim() : v;
+                            if (resultText) {
+                                invoke('inline_paste', { text: resultText });
+                            }
+                        }
                         if (v !== '') {
                             setHideOnce(false);
                         }
@@ -267,6 +277,13 @@ export default function TargetArea(props) {
                             if (translateID[index] !== id) return;
                             setResult(typeof v === 'string' ? v.trim() : v);
                             setIsLoading(false);
+                            if (inlineTranslate) {
+                                setInlineTranslate(false);
+                                const resultText = typeof v === 'string' ? v.trim() : v;
+                                if (resultText) {
+                                    invoke('inline_paste', { text: resultText });
+                                }
+                            }
                             if (v !== '') {
                                 setHideOnce(false);
                             }

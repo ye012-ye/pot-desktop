@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { HiTranslate } from 'react-icons/hi';
 import { LuDelete } from 'react-icons/lu';
 import { invoke } from '@tauri-apps/api';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
@@ -25,6 +25,7 @@ import { debug } from 'tauri-plugin-log-api';
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
+export const inlineTranslateAtom = atom(false);
 
 let unlisten = null;
 let timer = null;
@@ -36,6 +37,7 @@ export default function SourceArea(props) {
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
+    const setInlineTranslate = useSetAtom(inlineTranslateAtom);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
     const [recognizeLanguage] = useConfig('recognize_language', 'auto');
     const [recognizeServiceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
@@ -51,9 +53,15 @@ export default function SourceArea(props) {
 
     const handleNewText = async (text) => {
         text = text.trim();
+        // Check for inline translate marker - don't show window
+        let isInline = false;
+        if (text.startsWith('[INLINE_TRANSLATE]')) {
+            isInline = true;
+            text = text.substring('[INLINE_TRANSLATE]'.length).trim();
+        }
         if (hideWindow) {
             appWindow.hide();
-        } else {
+        } else if (!isInline) {
             appWindow.show();
             appWindow.setFocus();
         }
@@ -146,6 +154,9 @@ export default function SourceArea(props) {
             }
         } else {
             setWindowType('[SELECTION_TRANSLATE]');
+            if (isInline) {
+                setInlineTranslate(true);
+            }
             let newText = text.trim();
             if (deleteNewline) {
                 newText = text.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
@@ -272,14 +283,17 @@ export default function SourceArea(props) {
                 });
             }, 1000);
         }
-    }
+    };
 
     const transformVarName = function (str) {
         let str2 = str;
 
         // snake_case to SNAKE_CASE
         if (/_[a-z]/.test(str2)) {
-            str2 = str2.split('_').map(it => it.toLocaleUpperCase()).join('_');
+            str2 = str2
+                .split('_')
+                .map((it) => it.toLocaleUpperCase())
+                .join('_');
         }
         if (str2 !== str) {
             return str2;
@@ -287,7 +301,10 @@ export default function SourceArea(props) {
 
         // SNAKE_CASE to kebab-case
         if (/^[A-Z]+(_[A-Z]+)*$/.test(str2)) {
-            str2 = str2.split('_').map(it => it.toLocaleLowerCase()).join('-');
+            str2 = str2
+                .split('_')
+                .map((it) => it.toLocaleLowerCase())
+                .join('-');
         }
         if (str2 !== str) {
             return str2;
@@ -295,7 +312,10 @@ export default function SourceArea(props) {
 
         // kebab-case to dot.notation
         if (/-/.test(str2)) {
-            str2 = str2.split('-').map(it => it.toLocaleLowerCase()).join('.');
+            str2 = str2
+                .split('-')
+                .map((it) => it.toLocaleLowerCase())
+                .join('.');
         }
         if (str2 !== str) {
             return str2;
@@ -343,9 +363,9 @@ export default function SourceArea(props) {
         }
 
         return str2;
-    }
+    };
     useEffect(() => {
-        textAreaRef.current.addEventListener("keydown", async (event) => {
+        textAreaRef.current.addEventListener('keydown', async (event) => {
             if (event.altKey && event.shiftKey && event.code === 'KeyU') {
                 const originText = textAreaRef.current.value;
                 const selectionStart = textAreaRef.current.selectionStart;
@@ -353,7 +373,8 @@ export default function SourceArea(props) {
                 const selectionText = originText.substring(selectionStart, selectionEnd);
 
                 const convertedText = transformVarName(selectionText);
-                const targetText = originText.substring(0, selectionStart) + convertedText + originText.substring(selectionEnd);
+                const targetText =
+                    originText.substring(0, selectionStart) + convertedText + originText.substring(selectionEnd);
 
                 await changeSourceText(targetText);
                 textAreaRef.current.selectionStart = selectionStart;
@@ -361,7 +382,6 @@ export default function SourceArea(props) {
             }
         });
     }, [textAreaRef]);
-
 
     return (
         <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' && 'hidden'}>

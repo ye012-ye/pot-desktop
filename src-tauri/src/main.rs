@@ -138,6 +138,7 @@ fn main() {
             unset_proxy,
             run_binary,
             open_devtools,
+            inline_paste,
             register_shortcut_by_frontend,
             update_tray,
             updater_window,

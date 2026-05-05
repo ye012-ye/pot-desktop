@@ -225,3 +225,54 @@ pub fn open_devtools(window: tauri::Window) {
         window.close_devtools();
     }
 }
+
+#[tauri::command]
+pub fn inline_paste(text: String) -> Result<(), Error> {
+    use arboard::Clipboard;
+    use enigo::{Enigo, Key, Keyboard, Settings};
+    use enigo::Direction::{Press, Release};
+    use std::thread;
+    use std::time::Duration;
+
+    // Save original clipboard
+    let mut old_clipboard = String::new();
+    if let Ok(mut clipboard) = Clipboard::new() {
+        if let Ok(old) = clipboard.get_text() {
+            old_clipboard = old;
+        }
+        let _ = clipboard.set_text(&text);
+    }
+
+    // Small delay to ensure clipboard is updated
+    thread::sleep(Duration::from_millis(50));
+
+    // Simulate paste: Ctrl+V (Cmd+V on macOS)
+    #[cfg(target_os = "macos")]
+    let paste_key = Key::Meta;
+    #[cfg(not(target_os = "macos"))]
+    let paste_key = Key::Control;
+
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| Error::Error(Box::new(e)))?;
+
+    enigo
+        .key(paste_key, Press)
+        .map_err(|e| Error::Error(Box::new(e)))?;
+    enigo
+        .key(Key::Unicode('v'), Press)
+        .map_err(|e| Error::Error(Box::new(e)))?;
+    enigo
+        .key(Key::Unicode('v'), Release)
+        .map_err(|e| Error::Error(Box::new(e)))?;
+    enigo
+        .key(paste_key, Release)
+        .map_err(|e| Error::Error(Box::new(e)))?;
+
+    // Restore original clipboard after paste
+    thread::sleep(Duration::from_millis(200));
+    if let Ok(mut clipboard) = Clipboard::new() {
+        let _ = clipboard.set_text(&old_clipboard);
+    }
+
+    Ok(())
+}

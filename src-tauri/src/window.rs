@@ -238,6 +238,22 @@ pub fn selection_translate() {
     window.emit("new_text", text).unwrap();
 }
 
+pub fn inline_translate() {
+    use selection::get_text;
+
+    let text = get_text();
+    if text.trim().is_empty() {
+        return;
+    }
+    let app_handle = APP.get().unwrap();
+    let state: tauri::State<StringWrapper> = app_handle.state();
+    state.0.lock().unwrap().replace_range(.., &text);
+
+    let window = translate_window();
+    let event_text = format!("[INLINE_TRANSLATE]{}", text);
+    window.emit("new_text", event_text).unwrap();
+}
+
 pub fn input_translate() {
     let app_handle = APP.get().unwrap();
     // Clear State

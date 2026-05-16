@@ -22,6 +22,7 @@ import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
 import { debug } from 'tauri-plugin-log-api';
+import { getCachedInlineTranslate } from '../../inlineTranslateCache';
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
@@ -70,6 +71,15 @@ export default function SourceArea(props) {
         } else {
             appWindow.show();
             appWindow.setFocus();
+        }
+        if (isInline) {
+            const cachedText = getCachedInlineTranslate(text);
+            if (cachedText) {
+                setInlineTranslate(false);
+                lastInlineTranslateRef.current = false;
+                await invoke('inline_paste', { text: cachedText });
+                return;
+            }
         }
         // 清空检测语言
         setDetectLanguage('');

@@ -39,6 +39,7 @@ import { sourceTextAtom, detectLanguageAtom, inlineTranslateAtom } from '../Sour
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
 import * as builtinTtsServices from '../../../../services/tts';
+import { cacheInlineTranslatePair } from '../../inlineTranslateCache';
 
 import { info, error as logError } from 'tauri-plugin-log-api';
 import {
@@ -163,6 +164,19 @@ export default function TargetArea(props) {
         };
     }
 
+    const handleInlineTranslateResult = (value) => {
+        if (!inlineTranslate || index !== 0) {
+            return;
+        }
+
+        setInlineTranslate(false);
+        const resultText = typeof value === 'string' ? value.trim() : '';
+        if (resultText) {
+            cacheInlineTranslatePair(sourceText.trim(), resultText);
+            invoke('inline_paste', { text: resultText });
+        }
+    };
+
     const translate = async () => {
         let id = nanoid();
         translateID[index] = id;
@@ -197,13 +211,7 @@ export default function TargetArea(props) {
                         if (translateID[index] !== id) return;
                         setResult(typeof v === 'string' ? v.trim() : v);
                         setIsLoading(false);
-                        if (inlineTranslate && index === 0) {
-                            setInlineTranslate(false);
-                            const resultText = typeof v === 'string' ? v.trim() : v;
-                            if (resultText) {
-                                invoke('inline_paste', { text: resultText });
-                            }
-                        }
+                        handleInlineTranslateResult(v);
                         if (v !== '') {
                             setHideOnce(false);
                         }
@@ -283,13 +291,7 @@ export default function TargetArea(props) {
                             if (translateID[index] !== id) return;
                             setResult(typeof v === 'string' ? v.trim() : v);
                             setIsLoading(false);
-                            if (inlineTranslate && index === 0) {
-                                setInlineTranslate(false);
-                                const resultText = typeof v === 'string' ? v.trim() : v;
-                                if (resultText) {
-                                    invoke('inline_paste', { text: resultText });
-                                }
-                            }
+                            handleInlineTranslateResult(v);
                             if (v !== '') {
                                 setHideOnce(false);
                             }
@@ -354,6 +356,17 @@ export default function TargetArea(props) {
             }
         }
     }, [result]);
+
+    // Safety net: auto-expand the result panel whenever something is
+    // available to show. setHideOnce is one-shot per translate() call, so
+    // a setHide(true) racing from a re-fire of the translate useEffect can
+    // leave the panel collapsed even though result/error are non-empty.
+    useEffect(() => {
+        const hasResult = typeof result === 'string' ? result !== '' : result != null;
+        if (hasResult || error !== '') {
+            setHide(false);
+        }
+    }, [result, error]);
 
     // refresh tts config
     useEffect(() => {

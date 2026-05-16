@@ -1,6 +1,11 @@
 import { fetch, Body } from '@tauri-apps/api/http';
 import { Language } from './info';
 import { defaultRequestArguments } from './Config';
+import { ensureOllamaReady } from '../../../utils/ollama_warmup';
+
+function looksLikeOllamaEndpoint(path) {
+    return /11434|ollama/i.test(path);
+}
 
 export async function translate(text, from, to, options) {
     const { config, setResult, detect } = options;
@@ -10,6 +15,12 @@ export async function translate(text, from, to, options) {
     if (!/https?:\/\/.+/.test(requestPath)) {
         requestPath = `https://${requestPath}`;
     }
+
+    // openai-compatible 实例如果指向本地 ollama，先唤醒它再发请求
+    if (looksLikeOllamaEndpoint(requestPath)) {
+        await ensureOllamaReady(new URL(requestPath).origin);
+    }
+
     const apiUrl = new URL(requestPath);
 
     // in openai like api, /v1 is not required
@@ -61,11 +72,42 @@ export async function translate(text, from, to, options) {
         body['model'] = model;
     }
     if (stream) {
-        const res = await window.fetch(apiUrl.href, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body),
-        });
+        let res;
+        try {
+            res = await window.fetch(apiUrl.href, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            // dev 模式下 webview CORS 常导致 TypeError: Failed to fetch；
+            // 退化成 Tauri 的非流式 fetch 重试一次，确保至少能拿到结果
+            if (e instanceof TypeError) {
+                const fallbackBody = { ...body, stream: false };
+                const fallbackRes = await fetch(apiUrl.href, {
+                    method: 'POST',
+                    headers: headers,
+                    body: Body.json(fallbackBody),
+                });
+                if (fallbackRes.ok) {
+                    const { choices } = fallbackRes.data;
+                    if (choices) {
+                        let target = choices[0].message.content.trim();
+                        if (target) {
+                            if (target.startsWith('"')) target = target.slice(1);
+                            if (target.endsWith('"')) target = target.slice(0, -1);
+                            const finalTarget = target.trim();
+                            if (setResult) setResult(finalTarget);
+                            return finalTarget;
+                        }
+                        throw JSON.stringify(choices);
+                    }
+                    throw JSON.stringify(fallbackRes.data);
+                }
+                throw `Http Request Error\nHttp Status: ${fallbackRes.status}\n${JSON.stringify(fallbackRes.data)}`;
+            }
+            throw e;
+        }
         if (res.ok) {
             let target = '';
             const reader = res.body.getReader();

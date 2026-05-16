@@ -1,5 +1,6 @@
 import { Language } from './info';
 import { Ollama } from 'ollama/browser';
+import { ensureOllamaReady } from '../../../utils/ollama_warmup';
 
 export async function translate(text, from, to, options = {}) {
     const { config, setResult, detect } = options;
@@ -12,6 +13,10 @@ export async function translate(text, from, to, options = {}) {
     if (requestPath.endsWith('/')) {
         requestPath = requestPath.slice(0, -1);
     }
+
+    // 调翻译前先确保 ollama 在跑（用户中途杀掉服务、未启动等场景）
+    await ensureOllamaReady(requestPath);
+
     const ollama = new Ollama({ host: requestPath });
 
     promptList = promptList.map((item) => {

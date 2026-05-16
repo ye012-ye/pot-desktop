@@ -1,24 +1,24 @@
-# Repository guidance instruction
+# 仓库指导说明
 
-## Project Structure & Module Organization
+## 项目结构及模块组织
 
-This repository is a Tauri desktop app with a Vite/React frontend and a Rust backend. Frontend code lives in `src/`: reusable UI in `src/components`, React hooks in `src/hooks`, localization files in `src/i18n/locales`, integration logic in `src/services`, and window-level views in `src/window`. Native commands and platform behavior live in `src-tauri/src`. Static runtime assets are in `public`, README images are in `asset`, release/update utilities are in `updater`, and design or implementation notes are in `docs`.
+以下是使用Tauri开发的桌面应用程序。前端使用了Vite和React技术构建，后端则采用了Rust语言。前端代码可以在`src/`目录中找到：可重用的UI组件位于`src/components`下，React钩子在`src/hooks`，国际化文件在`src/i18n/locales`，集成逻辑在`src/services`，而窗口级别的视图则在`src/window`。源代码命令和针对不同平台的行为存储在`src-tauri/src`目录中。静态运行时资源存放在`public`目录下，README中提到的图片则保留在`asset`文件夹内。更新/发布工具可以在`updater`目录找到，设计或实现说明则保留在`docs`目录内。
 
 ## Build, Test, and Development Commands
 
 Use `pnpm` because the repository includes `pnpm-lock.yaml`.
 
-- `pnpm install`: install JavaScript dependencies.
-- `pnpm dev`: start the Vite frontend dev server.
-- `pnpm tauri dev`: run the full desktop app locally.
-- `pnpm build`: build the frontend bundle into `dist`.
-- `pnpm tauri build`: build packaged desktop artifacts.
-- `cd src-tauri && cargo check`: validate Rust code quickly.
-- `cd src-tauri && cargo test`: run Rust tests when present.
+- `pnpm install`: 安装JavaScript依赖项。
+- `pnpm dev`: 启动Vite前端开发服务器。
+- `pnpm tauri dev`: 在本地运行全屏桌面应用程序。
+- `pnpm build`:将前端打包结果构建到 `dist`。
+- `pnpm tauri build`: 创作一个包装好的桌面艺术品。
+- `cd src-tauri && cargo check`: 快速验证Rust代码。
+- `cd src-tauri && cargo test`: 当存在时运行Rust测试。
 
-Local agent shells should prefix commands with `rtk`, for example `rtk pnpm build`.
+本地代理壳应将命令前缀为`rtk`，例如`rtk pnpm build`。
 
-## Coding Style & Naming Conventions
+## 编程风格和命名约定
 
 JavaScript and JSX use Prettier from `.prettierrc.json`: 4-space indentation, single quotes, semicolons, `printWidth` 120, trailing commas where valid in ES5, and LF line endings. Keep React components in PascalCase and hooks as `useSomething`. Service provider folders under `src/services/{translate,recognize,tts,collection}` use lowercase provider names matching existing patterns. Rust modules use snake_case file names and standard Rust naming conventions.
 

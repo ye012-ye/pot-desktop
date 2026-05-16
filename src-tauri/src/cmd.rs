@@ -218,6 +218,61 @@ pub fn font_list() -> Result<Vec<String>, Error> {
 }
 
 #[tauri::command]
+pub fn start_ollama_serve() {
+    use std::path::PathBuf;
+    use std::process::{Command, Stdio};
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    // 候选可执行文件：先试 PATH，再试常见安装位置
+    let mut candidates: Vec<String> = vec!["ollama".to_string()];
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
+            let mut p = PathBuf::from(local_app);
+            p.push("Programs");
+            p.push("Ollama");
+            p.push("ollama.exe");
+            candidates.push(p.to_string_lossy().into_owned());
+        }
+        candidates.push(r"C:\Program Files\Ollama\ollama.exe".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        candidates.push("/usr/local/bin/ollama".to_string());
+        candidates.push("/opt/homebrew/bin/ollama".to_string());
+        candidates.push("/Applications/Ollama.app/Contents/Resources/ollama".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        candidates.push("/usr/local/bin/ollama".to_string());
+        candidates.push("/usr/bin/ollama".to_string());
+    }
+
+    for exe in candidates {
+        let mut cmd = Command::new(&exe);
+        cmd.arg("serve")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null());
+
+        // CREATE_NO_WINDOW + DETACHED_PROCESS：黑框不闪 + pot 退出不带走 ollama
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000 | 0x00000008);
+
+        match cmd.spawn() {
+            Ok(_) => {
+                info!("Spawned `ollama serve` via {}", exe);
+                return;
+            }
+            Err(e) => info!("Skip {}: {}", exe, e),
+        }
+    }
+    info!("All ollama candidates failed; ollama may not be installed");
+}
+
+#[tauri::command]
 pub fn open_devtools(window: tauri::Window) {
     if !window.is_devtools_open() {
         window.open_devtools();

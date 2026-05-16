@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk pnpm *)",
+      "Bash(pnpm install *)",
+      "Bash(curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs)",
+      "Bash(sh -s -- -y)",
+      "Read(//c/Users/35502/.cargo/bin/**)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(cargo --version)",
+      "Bash(pnpm tauri *)",
+      "Bash(cat ~/.rustup/settings.toml 2>&1; echo \"---\"; which cl.exe 2>&1; which gcc 2>&1)",
+      "Read(//c/Users/35502/.rustup/**)",
+      "Read(//mingw64/**)",
+      "Bash(pacman --version)",
+      "Bash(winget install *)",
+      "Read(//d/app/LLVM/bin/**)",
+      "Bash(llvm-config --version)",
+      "Bash(CC=clang CXX=clang++ pnpm tauri build)",
+      "Bash(winget search *)",
+      "Bash(find /c/Users/35502/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe -name \"gcc.exe\" -type f 2>/dev/null | head -5)",
+      "Read(//c/Users/35502/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/**)",
+      "Bash(export GCC_PATH=\"/c/Users/35502/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin\")",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$GCC_PATH:$PATH\")",
+      "Bash(gcc --version)"
+    ]
+  }
+}

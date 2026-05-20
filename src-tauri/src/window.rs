@@ -231,15 +231,171 @@ fn translate_window() -> Window {
     window
 }
 
-pub fn selection_translate() {
+// On Windows, poll GetAsyncKeyState until physical Alt / Ctrl / Shift / Win
+// are all released. `selection::get_text()` falls back to simulating Ctrl+C
+// with SendInput, but synthetic key-up events do NOT release the user's
+// physical keys — if Alt is still held, the OS sees Ctrl+Alt+C and copy
+// fails. We must wait for the user to actually let go of the hotkey.
+#[cfg(windows)]
+fn wait_for_modifiers_released(timeout_ms: u64) {
+    use std::time::{Duration, Instant};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    };
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let high_bit = 0x8000u16 as i16;
+    // 5ms poll: fast enough to feel instant when user releases quickly.
+    while Instant::now() < deadline {
+        let any_held = unsafe {
+            (GetAsyncKeyState(VK_MENU.0 as i32) & high_bit) != 0
+                || (GetAsyncKeyState(VK_CONTROL.0 as i32) & high_bit) != 0
+                || (GetAsyncKeyState(VK_SHIFT.0 as i32) & high_bit) != 0
+                || (GetAsyncKeyState(VK_LWIN.0 as i32) & high_bit) != 0
+                || (GetAsyncKeyState(VK_RWIN.0 as i32) & high_bit) != 0
+        };
+        if !any_held {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // Minimal grace for the OS to flush the key-up.
+    std::thread::sleep(Duration::from_millis(10));
+}
+
+#[cfg(not(windows))]
+fn wait_for_modifiers_released(_timeout_ms: u64) {
+    std::thread::sleep(std::time::Duration::from_millis(50));
+}
+
+// Custom selected-text reader. The `selection` crate's Ctrl+C fallback only
+// waits a fixed 100ms before checking the clipboard, which both feels slow
+// on fast apps and fails on slow ones. This version polls the clipboard
+// for changes from a sentinel value, so it returns as soon as the target
+// app finishes putting the selected text on the clipboard.
+#[cfg(windows)]
+fn read_selected_text() -> String {
+    use arboard::Clipboard;
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
+    wait_for_modifiers_released(500);
+
+    let mut clipboard = match Clipboard::new() {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("read_selected_text: clipboard open failed: {}", e);
+            return String::new();
+        }
+    };
+
+    let original = clipboard.get_text().ok();
+
+    // Sentinel so we can distinguish "Ctrl+C didn't fire" from "selection
+    // really is the same text that was already on the clipboard".
+    let sentinel = "\u{0001}__POT_GETSEL_PROBE__\u{0001}";
+    let _ = clipboard.set_text(sentinel);
+
+    let mut enigo = match Enigo::new(&Settings::default()) {
+        Ok(e) => e,
+        Err(e) => {
+            log::error!("read_selected_text: enigo init failed: {}", e);
+            if let Some(orig) = original {
+                let _ = clipboard.set_text(orig);
+            }
+            return String::new();
+        }
+    };
+
+    // Up to 3 Ctrl+C attempts. Each polls the clipboard for up to
+    // `max_wait_ms` and returns immediately as soon as a non-sentinel
+    // value appears. Subsequent attempts get more patience for slow apps.
+    let attempts: [(u64, u64); 3] = [
+        (10, 200),  // attempt 1: 10ms pre, poll up to 200ms
+        (40, 400),  // attempt 2
+        (80, 600),  // attempt 3
+    ];
+
+    let mut result = String::new();
+    let total_start = Instant::now();
+    for (idx, &(pre_wait, max_wait_ms)) in attempts.iter().enumerate() {
+        sleep(Duration::from_millis(pre_wait));
+        let _ = enigo.key(Key::Control, Direction::Press);
+        sleep(Duration::from_millis(5));
+        let _ = enigo.key(Key::Unicode('c'), Direction::Click);
+        sleep(Duration::from_millis(5));
+        let _ = enigo.key(Key::Control, Direction::Release);
+
+        let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
+        let mut got = String::new();
+        while Instant::now() < deadline {
+            if let Ok(text) = clipboard.get_text() {
+                if text != sentinel && !text.is_empty() {
+                    got = text;
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(10));
+        }
+
+        if !got.is_empty() {
+            let elapsed = total_start.elapsed().as_millis();
+            log::info!(
+                "read_selected_text: got text on attempt {} after {}ms, len={}",
+                idx + 1,
+                elapsed,
+                got.len()
+            );
+            result = got;
+            break;
+        } else {
+            log::warn!(
+                "read_selected_text: attempt {} timed out after {}ms",
+                idx + 1,
+                max_wait_ms
+            );
+        }
+    }
+
+    match original {
+        Some(orig) => {
+            let _ = clipboard.set_text(orig);
+        }
+        None => {
+            let _ = clipboard.clear();
+        }
+    }
+
+    if result.is_empty() {
+        log::warn!("read_selected_text: all attempts failed, returning empty");
+    }
+    result
+}
+
+#[cfg(not(windows))]
+fn read_selected_text() -> String {
     use selection::get_text;
-    // Get Selected Text
-    let text = get_text();
-    if !text.trim().is_empty() {
-        let app_handle = APP.get().unwrap();
-        // Write into State
-        let state: tauri::State<StringWrapper> = app_handle.state();
-        state.0.lock().unwrap().replace_range(.., &text);
+    wait_for_modifiers_released(500);
+    get_text()
+}
+
+pub fn selection_translate() {
+    let text = read_selected_text();
+    let app_handle = APP.get().unwrap();
+    let state: tauri::State<StringWrapper> = app_handle.state();
+    // Always overwrite the cached state — including with an empty string when
+    // read_selected_text() fails — so the frontend's mount-time
+    // `invoke('get_text')` does not resurrect the previous translation as if
+    // it were a new selection.
+    state.0.lock().unwrap().replace_range(.., &text);
+
+    if text.trim().is_empty() {
+        log::warn!("selection_translate: empty text, not opening translate window");
+        let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+            .title("Pot")
+            .body("无法获取选中文本，请重新选中后再试")
+            .show();
+        return;
     }
 
     let window = translate_window();
@@ -247,24 +403,28 @@ pub fn selection_translate() {
 }
 
 pub fn inline_translate() {
-    use selection::get_text;
-
-    let text = get_text();
+    let text = read_selected_text();
     log::info!("inline_translate called, text length: {}", text.len());
     if text.trim().is_empty() {
         log::info!("inline_translate: empty text, returning");
         return;
     }
     let event_text = format!("[INLINE_TRANSLATE]{}", text);
+    let app_handle = APP.get().unwrap();
+    // Always overwrite the cached StringWrapper so the frontend's mount /
+    // config-dep effect that calls `invoke('get_text')` can never resurrect
+    // a stale value from a previous Alt+E / Alt+Q. Both selection_translate
+    // and inline_translate must keep this state authoritative.
+    {
+        let state: tauri::State<StringWrapper> = app_handle.state();
+        state.0.lock().unwrap().replace_range(.., &event_text);
+    }
     // Get or create a hidden translate window for processing — must NOT
     // focus or show it, otherwise the paste goes to Pot instead of the
     // original application.
-    let app_handle = APP.get().unwrap();
     let window = match app_handle.get_window("translate") {
         Some(w) => w,
         None => {
-            let state: tauri::State<StringWrapper> = app_handle.state();
-            state.0.lock().unwrap().replace_range(.., &event_text);
             let width = match get("translate_window_width") {
                 Some(v) => v.as_i64().unwrap(),
                 None => 350,

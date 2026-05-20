@@ -251,7 +251,14 @@ export default function SourceArea(props) {
             }
             unlisten = listen('new_text', (event) => {
                 const text = event.payload ?? '';
-                if (!text.startsWith('[INLINE_TRANSLATE]')) {
+                const isInline = text.startsWith('[INLINE_TRANSLATE]');
+                // Clear the previous source text BEFORE focusing the window,
+                // so a fresh Alt+E never briefly shows leftover content from
+                // the previous Alt+Q / Alt+E session. Inline path keeps the
+                // window hidden so the flash is invisible there anyway, but
+                // resetting is still cheaper than reasoning about staleness.
+                if (!isInline) {
+                    setSourceText('', true);
                     appWindow.setFocus();
                 }
                 handleNewText(text);

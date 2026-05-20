@@ -281,6 +281,67 @@ pub fn open_devtools(window: tauri::Window) {
     }
 }
 
+// Write text to the Windows clipboard while marking it with
+// `ExcludeClipboardContentFromMonitorProcessing` so the Cloud / Win+V
+// clipboard-history service skips this entry. Used by `inline_paste` so
+// the translated text we briefly stage on the clipboard does not pile up
+// in the user's clipboard history.
+#[cfg(windows)]
+fn set_clipboard_text_no_history(text: &str) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{HANDLE, HWND};
+    use windows::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW,
+        SetClipboardData,
+    };
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+
+    const CF_UNICODETEXT: u32 = 13;
+
+    let mut wide: Vec<u16> = text.encode_utf16().collect();
+    wide.push(0);
+    let bytes = wide.len() * std::mem::size_of::<u16>();
+
+    let exclude_name: Vec<u16> = "ExcludeClipboardContentFromMonitorProcessing\0"
+        .encode_utf16()
+        .collect();
+
+    unsafe {
+        if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
+            return Err("OpenClipboard failed".into());
+        }
+        let _ = EmptyClipboard();
+
+        let h_mem = GlobalAlloc(GMEM_MOVEABLE, bytes).map_err(|e| {
+            let _ = CloseClipboard();
+            format!("GlobalAlloc failed: {}", e)
+        })?;
+        let dst = GlobalLock(h_mem) as *mut u16;
+        if dst.is_null() {
+            let _ = CloseClipboard();
+            return Err("GlobalLock failed".into());
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), dst, wide.len());
+        let _ = GlobalUnlock(h_mem);
+
+        if SetClipboardData(CF_UNICODETEXT, HANDLE(h_mem.0)).is_err() {
+            let _ = CloseClipboard();
+            return Err("SetClipboardData(CF_UNICODETEXT) failed".into());
+        }
+
+        let fmt = RegisterClipboardFormatW(PCWSTR(exclude_name.as_ptr()));
+        if fmt != 0 {
+            // The format only needs to be present — value can be a null
+            // handle. Clipboard history scans for the format name and
+            // skips the entry when it is registered.
+            let _ = SetClipboardData(fmt, HANDLE(std::ptr::null_mut()));
+        }
+
+        let _ = CloseClipboard();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn inline_paste(text: String) -> Result<(), Error> {
     use arboard::Clipboard;
@@ -290,11 +351,26 @@ pub fn inline_paste(text: String) -> Result<(), Error> {
     use std::time::Duration;
 
     log::info!("inline_paste: received text length: {}", text.len());
-    // Save original clipboard text (if any)
+    // Save original clipboard text (if any).
     let mut old_clipboard: Option<String> = None;
     if let Ok(mut clipboard) = Clipboard::new() {
         old_clipboard = clipboard.get_text().ok();
-        let _ = clipboard.set_text(&text);
+    }
+    // Stage the translated text WITHOUT polluting Win+V clipboard history.
+    #[cfg(windows)]
+    {
+        if let Err(e) = set_clipboard_text_no_history(&text) {
+            log::warn!("inline_paste: history-exclude set failed ({}), falling back to arboard", e);
+            if let Ok(mut clipboard) = Clipboard::new() {
+                let _ = clipboard.set_text(&text);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(mut clipboard) = Clipboard::new() {
+            let _ = clipboard.set_text(&text);
+        }
     }
 
     // Small delay to ensure clipboard is updated
@@ -322,11 +398,24 @@ pub fn inline_paste(text: String) -> Result<(), Error> {
         .key(paste_key, Release)
         .map_err(|e| Error::Error(Box::new(e)))?;
 
-    // Restore original clipboard after paste (only if we saved text)
+    // Restore original clipboard after paste (only if we saved text).
+    // Also mark as history-excluded so the restore doesn't appear in Win+V.
     thread::sleep(Duration::from_millis(200));
     if let Some(old) = old_clipboard {
-        if let Ok(mut clipboard) = Clipboard::new() {
-            let _ = clipboard.set_text(&old);
+        #[cfg(windows)]
+        {
+            if let Err(e) = set_clipboard_text_no_history(&old) {
+                log::warn!("inline_paste: restore history-exclude failed ({}), falling back", e);
+                if let Ok(mut clipboard) = Clipboard::new() {
+                    let _ = clipboard.set_text(&old);
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            if let Ok(mut clipboard) = Clipboard::new() {
+                let _ = clipboard.set_text(&old);
+            }
         }
     }
 

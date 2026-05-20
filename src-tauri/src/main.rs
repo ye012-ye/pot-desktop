@@ -100,6 +100,27 @@ fn main() {
                     .show()
                     .unwrap(),
             }
+            // Always make sure localhost / 127.0.0.1 bypass any system /
+            // shell proxy. On Windows, reqwest reads the IE ProxyServer
+            // registry value but does not always honour ProxyOverride, so a
+            // system-wide proxy like Clash/V2Ray on 127.0.0.1:10808 ends up
+            // intercepting requests to local services like Ollama on
+            // localhost:11434. Setting `no_proxy` makes reqwest skip the
+            // proxy for these hosts. The user-configured `no_proxy` value
+            // (set via `set_proxy()` below) is merged on top when present.
+            let configured_no_proxy = get("no_proxy")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .unwrap_or_default();
+            let merged_no_proxy = if configured_no_proxy.is_empty() {
+                "localhost,127.0.0.1,::1".to_string()
+            } else if configured_no_proxy.contains("localhost") {
+                configured_no_proxy
+            } else {
+                format!("localhost,127.0.0.1,::1,{}", configured_no_proxy)
+            };
+            std::env::set_var("no_proxy", &merged_no_proxy);
+            std::env::set_var("NO_PROXY", &merged_no_proxy);
+
             match get("proxy_enable") {
                 Some(v) => {
                     if v.as_bool().unwrap() && get("proxy_host").map_or(false, |host| !host.as_str().unwrap().is_empty()) {

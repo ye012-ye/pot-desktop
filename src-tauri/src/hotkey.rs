@@ -55,21 +55,25 @@ pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
         "hotkey_ocr_recognize" => register(app_handle, "hotkey_ocr_recognize", ocr_recognize, "")?,
         "hotkey_ocr_translate" => register(app_handle, "hotkey_ocr_translate", ocr_translate, "")?,
         "all" => {
-            register(
-                app_handle,
-                "hotkey_selection_translate",
-                selection_translate,
-                "",
-            )?;
-            register(app_handle, "hotkey_input_translate", input_translate, "")?;
-            register(app_handle, "hotkey_ocr_recognize", ocr_recognize, "")?;
-            register(app_handle, "hotkey_ocr_translate", ocr_translate, "")?;
-            register(
-                app_handle,
-                "hotkey_inline_translate",
-                inline_translate,
-                "",
-            )?;
+            // Register each shortcut independently so that one failure (e.g.
+            // the key is already taken by another app) does not skip the
+            // remaining registrations. Previously the `?` operator caused any
+            // earlier failure to short-circuit `hotkey_inline_translate`,
+            // leaving Alt+E silently unbound after restart.
+            let mut errors: Vec<String> = Vec::new();
+            let mut try_register = |name: &str, handler: fn()| {
+                if let Err(e) = register(app_handle, name, handler, "") {
+                    errors.push(format!("{}: {}", name, e));
+                }
+            };
+            try_register("hotkey_selection_translate", selection_translate);
+            try_register("hotkey_input_translate", input_translate);
+            try_register("hotkey_ocr_recognize", ocr_recognize);
+            try_register("hotkey_ocr_translate", ocr_translate);
+            try_register("hotkey_inline_translate", inline_translate);
+            if !errors.is_empty() {
+                return Err(errors.join("\n"));
+            }
         }
         "hotkey_inline_translate" => register(
             app_handle,

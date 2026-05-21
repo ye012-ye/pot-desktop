@@ -5,7 +5,7 @@ use crate::window::input_translate;
 use crate::window::ocr_recognize;
 use crate::window::ocr_translate;
 use crate::window::updater_window;
-use log::info;
+use log::{info, warn};
 use tauri::CustomMenuItem;
 use tauri::GlobalShortcutManager;
 use tauri::SystemTrayEvent;
@@ -113,6 +113,7 @@ pub fn tray_event_handler<'a>(app: &'a AppHandle, event: SystemTrayEvent) {
             "check_update" => on_check_update_click(),
             "view_log" => on_view_log_click(app),
             "restart" => on_restart_click(app),
+            "restart_as_admin" => on_restart_as_admin_click(app),
             "quit" => on_quit_click(app),
             _ => {}
         },
@@ -197,6 +198,93 @@ fn on_restart_click(app: &AppHandle) {
     info!("============== Restart App ==============");
     app.restart();
 }
+
+#[cfg(target_os = "windows")]
+pub fn is_elevated() -> bool {
+    use std::mem::size_of;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    unsafe {
+        let mut token = HANDLE::default();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
+            return false;
+        }
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut ret_len = 0u32;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            Some(&mut elevation as *mut _ as *mut _),
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut ret_len,
+        );
+        let _ = CloseHandle(token);
+        ok.is_ok() && elevation.TokenIsElevated != 0
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn is_elevated() -> bool {
+    false
+}
+
+fn on_restart_as_admin_click(app: &AppHandle) {
+    #[cfg(target_os = "windows")]
+    {
+        if is_elevated() {
+            info!("restart_as_admin: already elevated, doing normal restart");
+            app.restart();
+            return;
+        }
+        let exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("restart_as_admin: current_exe failed: {}", e);
+                return;
+            }
+        };
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let exe_wide: Vec<u16> = exe
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let verb: Vec<u16> = "runas".encode_utf16().chain(std::iter::once(0)).collect();
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(verb.as_ptr()),
+                PCWSTR(exe_wide.as_ptr()),
+                None,
+                None,
+                SW_SHOWNORMAL,
+            )
+        };
+        // ShellExecuteW returns > 32 on success; SE_ERR_ACCESSDENIED (5) when UAC dismissed.
+        if (result.0 as isize) > 32 {
+            info!("restart_as_admin: elevated process launched, exiting current");
+            let _ = app.global_shortcut_manager().unregister_all();
+            app.exit(0);
+        } else {
+            warn!(
+                "restart_as_admin: ShellExecuteW failed code={} (likely UAC dismissed)",
+                result.0 as isize
+            );
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        warn!("restart_as_admin: not supported on this platform, doing normal restart");
+        app.restart();
+    }
+}
+
 fn on_quit_click(app: &AppHandle) {
     app.global_shortcut_manager().unregister_all().unwrap();
     info!("============== Quit App ==============");
@@ -216,6 +304,7 @@ fn tray_menu_en() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Check Update");
     let view_log = CustomMenuItem::new("view_log", "View Log");
     let restart = CustomMenuItem::new("restart", "Restart");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Restart as Administrator");
     let quit = CustomMenuItem::new("quit", "Quit");
     SystemTrayMenu::new()
         .add_item(input_translate)
@@ -238,6 +327,7 @@ fn tray_menu_en() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -254,6 +344,7 @@ fn tray_menu_zh_cn() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "偏好设置");
     let check_update = CustomMenuItem::new("check_update", "检查更新");
     let restart = CustomMenuItem::new("restart", "重启应用");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "以管理员身份重启");
     let view_log = CustomMenuItem::new("view_log", "查看日志");
     let quit = CustomMenuItem::new("quit", "退出");
     SystemTrayMenu::new()
@@ -277,6 +368,7 @@ fn tray_menu_zh_cn() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -293,6 +385,7 @@ fn tray_menu_zh_tw() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "偏好設定");
     let check_update = CustomMenuItem::new("check_update", "檢查更新");
     let restart = CustomMenuItem::new("restart", "重啓程式");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "以管理員身份重啓");
     let view_log = CustomMenuItem::new("view_log", "查看日誌");
     let quit = CustomMenuItem::new("quit", "退出");
     SystemTrayMenu::new()
@@ -316,6 +409,7 @@ fn tray_menu_zh_tw() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -332,6 +426,7 @@ fn tray_menu_ja() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "プリファレンス設定");
     let check_update = CustomMenuItem::new("check_update", "更新を確認する");
     let restart = CustomMenuItem::new("restart", "アプリの再起動");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "管理者として再起動");
     let view_log = CustomMenuItem::new("view_log", "ログを見る");
     let quit = CustomMenuItem::new("quit", "退出する");
     SystemTrayMenu::new()
@@ -355,6 +450,7 @@ fn tray_menu_ja() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -371,6 +467,7 @@ fn tray_menu_ko() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "기본 설정");
     let check_update = CustomMenuItem::new("check_update", "업데이트 확인");
     let restart = CustomMenuItem::new("restart", "응용 프로그램 다시 시작");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "관리자 권한으로 다시 시작");
     let view_log = CustomMenuItem::new("view_log", "로그 보기");
     let quit = CustomMenuItem::new("quit", "퇴출");
     SystemTrayMenu::new()
@@ -394,6 +491,7 @@ fn tray_menu_ko() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -411,6 +509,7 @@ fn tray_menu_fr() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "Paramètres");
     let check_update = CustomMenuItem::new("check_update", "Vérifier les mises à jour");
     let restart = CustomMenuItem::new("restart", "Redémarrer l'application");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Redémarrer en tant qu'administrateur");
     let view_log = CustomMenuItem::new("view_log", "Voir le journal");
     let quit = CustomMenuItem::new("quit", "Quitter");
     SystemTrayMenu::new()
@@ -434,6 +533,7 @@ fn tray_menu_fr() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 fn tray_menu_de() -> tauri::SystemTrayMenu {
@@ -449,6 +549,7 @@ fn tray_menu_de() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "Einstellungen");
     let check_update = CustomMenuItem::new("check_update", "Auf Updates prüfen");
     let restart = CustomMenuItem::new("restart", "Anwendung neu starten");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Als Administrator neu starten");
     let view_log = CustomMenuItem::new("view_log", "Protokoll anzeigen");
     let quit = CustomMenuItem::new("quit", "Beenden");
     SystemTrayMenu::new()
@@ -472,6 +573,7 @@ fn tray_menu_de() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -488,6 +590,7 @@ fn tray_menu_ru() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "Настройки");
     let check_update = CustomMenuItem::new("check_update", "Проверить обновления");
     let restart = CustomMenuItem::new("restart", "Перезапустить приложение");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Перезапустить от имени администратора");
     let view_log = CustomMenuItem::new("view_log", "Просмотр журнала");
     let quit = CustomMenuItem::new("quit", "Выход");
     SystemTrayMenu::new()
@@ -511,6 +614,7 @@ fn tray_menu_ru() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -527,6 +631,7 @@ fn tray_menu_fa() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "تنظیمات ترجیح");
     let check_update = CustomMenuItem::new("check_update", "بررسی بروزرسانی");
     let restart = CustomMenuItem::new("restart", "راه‌اندازی مجدد برنامه");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "راه‌اندازی مجدد به‌عنوان مدیر");
     let view_log = CustomMenuItem::new("view_log", "مشاهده گزارشات");
     let quit = CustomMenuItem::new("quit", "خروج");
     SystemTrayMenu::new()
@@ -550,6 +655,7 @@ fn tray_menu_fa() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -567,6 +673,7 @@ fn tray_menu_pt_br() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "Configurações");
     let check_update = CustomMenuItem::new("check_update", "Checar por Atualização");
     let restart = CustomMenuItem::new("restart", "Reiniciar aplicativo");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Reiniciar como administrador");
     let view_log = CustomMenuItem::new("view_log", "Exibir Registro");
     let quit = CustomMenuItem::new("quit", "Sair");
     SystemTrayMenu::new()
@@ -590,6 +697,7 @@ fn tray_menu_pt_br() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }
 
@@ -606,6 +714,7 @@ fn tray_menu_uk() -> tauri::SystemTrayMenu {
     let config = CustomMenuItem::new("config", "Настройка");
     let check_update = CustomMenuItem::new("check_update", "Перевірити оновлення");
     let restart = CustomMenuItem::new("restart", "Перезапустити додаток");
+    let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Перезапустити від імені адміністратора");
     let view_log = CustomMenuItem::new("view_log", "Перегляд журналу");
     let quit = CustomMenuItem::new("quit", "Вихід");
     SystemTrayMenu::new()
@@ -629,5 +738,6 @@ fn tray_menu_uk() -> tauri::SystemTrayMenu {
         .add_item(view_log)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
+        .add_item(restart_as_admin)
         .add_item(quit)
 }

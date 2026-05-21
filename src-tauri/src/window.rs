@@ -237,14 +237,14 @@ fn translate_window() -> Window {
 // physical keys — if Alt is still held, the OS sees Ctrl+Alt+C and copy
 // fails. We must wait for the user to actually let go of the hotkey.
 #[cfg(windows)]
-fn wait_for_modifiers_released(timeout_ms: u64) {
+fn wait_for_modifiers_released(timeout_ms: u64) -> u64 {
     use std::time::{Duration, Instant};
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
     };
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(timeout_ms);
     let high_bit = 0x8000u16 as i16;
-    // 5ms poll: fast enough to feel instant when user releases quickly.
     while Instant::now() < deadline {
         let any_held = unsafe {
             (GetAsyncKeyState(VK_MENU.0 as i32) & high_bit) != 0
@@ -258,13 +258,37 @@ fn wait_for_modifiers_released(timeout_ms: u64) {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    // Minimal grace for the OS to flush the key-up.
     std::thread::sleep(Duration::from_millis(10));
+    start.elapsed().as_millis() as u64
+}
+
+#[cfg(windows)]
+fn foreground_window_info() -> (String, String) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetClassNameW, GetForegroundWindow, GetWindowTextW,
+    };
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        let mut title_buf = [0u16; 256];
+        let mut class_buf = [0u16; 256];
+        let tlen = GetWindowTextW(hwnd, &mut title_buf);
+        let clen = GetClassNameW(hwnd, &mut class_buf);
+        let title = String::from_utf16_lossy(&title_buf[..tlen as usize]);
+        let class = String::from_utf16_lossy(&class_buf[..clen as usize]);
+        (title, class)
+    }
+}
+
+#[cfg(windows)]
+fn clipboard_seq() -> u32 {
+    use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
+    unsafe { GetClipboardSequenceNumber() }
 }
 
 #[cfg(not(windows))]
-fn wait_for_modifiers_released(_timeout_ms: u64) {
+fn wait_for_modifiers_released(_timeout_ms: u64) -> u64 {
     std::thread::sleep(std::time::Duration::from_millis(50));
+    50
 }
 
 // Custom selected-text reader. The `selection` crate's Ctrl+C fallback only
@@ -279,7 +303,15 @@ fn read_selected_text() -> String {
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
-    wait_for_modifiers_released(500);
+    let wait_ms = wait_for_modifiers_released(500);
+    let (fg_title, fg_class) = foreground_window_info();
+    log::info!(
+        "read_selected_text: foreground hwnd title=\"{}\" class=\"{}\", mod-wait={}ms",
+        fg_title,
+        fg_class,
+        wait_ms
+    );
+    let seq_before = clipboard_seq();
 
     let mut clipboard = match Clipboard::new() {
         Ok(c) => c,
@@ -318,8 +350,16 @@ fn read_selected_text() -> String {
 
     let mut result = String::new();
     let total_start = Instant::now();
+    let seq_after_sentinel = clipboard_seq();
+    log::info!(
+        "read_selected_text: clipboard seq before={} after_sentinel={} (delta={})",
+        seq_before,
+        seq_after_sentinel,
+        seq_after_sentinel.wrapping_sub(seq_before)
+    );
     for (idx, &(pre_wait, max_wait_ms)) in attempts.iter().enumerate() {
         sleep(Duration::from_millis(pre_wait));
+        let seq_pre = clipboard_seq();
         let _ = enigo.key(Key::Control, Direction::Press);
         sleep(Duration::from_millis(5));
         let _ = enigo.key(Key::Unicode('c'), Direction::Click);
@@ -337,22 +377,28 @@ fn read_selected_text() -> String {
             }
             sleep(Duration::from_millis(10));
         }
+        let seq_post = clipboard_seq();
 
         if !got.is_empty() {
             let elapsed = total_start.elapsed().as_millis();
             log::info!(
-                "read_selected_text: got text on attempt {} after {}ms, len={}",
+                "read_selected_text: got text on attempt {} after {}ms, len={}, seq {}→{}",
                 idx + 1,
                 elapsed,
-                got.len()
+                got.len(),
+                seq_pre,
+                seq_post
             );
             result = got;
             break;
         } else {
             log::warn!(
-                "read_selected_text: attempt {} timed out after {}ms",
+                "read_selected_text: attempt {} timed out after {}ms, seq {}→{} (delta={})",
                 idx + 1,
-                max_wait_ms
+                max_wait_ms,
+                seq_pre,
+                seq_post,
+                seq_post.wrapping_sub(seq_pre)
             );
         }
     }

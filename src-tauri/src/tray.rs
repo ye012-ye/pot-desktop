@@ -75,6 +75,10 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         .set_selected(enable_clipboard_monitor)
         .unwrap();
 
+    let _ = tray_handle
+        .get_item("admin_autostart")
+        .set_selected(admin_autostart_enabled());
+
     match copy_mode.as_str() {
         "source" => tray_handle
             .get_item("copy_source")
@@ -114,6 +118,7 @@ pub fn tray_event_handler<'a>(app: &'a AppHandle, event: SystemTrayEvent) {
             "view_log" => on_view_log_click(app),
             "restart" => on_restart_click(app),
             "restart_as_admin" => on_restart_as_admin_click(app),
+            "admin_autostart" => on_admin_autostart_click(app),
             "quit" => on_quit_click(app),
             _ => {}
         },
@@ -285,6 +290,94 @@ fn on_restart_as_admin_click(app: &AppHandle) {
     }
 }
 
+const ADMIN_AUTOSTART_TASK: &str = "PotAppAdminAutostart";
+
+#[cfg(target_os = "windows")]
+fn admin_autostart_enabled() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    std::process::Command::new("schtasks")
+        .args(["/Query", "/TN", ADMIN_AUTOSTART_TASK])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn admin_autostart_enabled() -> bool {
+    false
+}
+
+#[cfg(target_os = "windows")]
+fn set_admin_autostart(enable: bool) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    if enable {
+        if !is_elevated() {
+            return Err("pot is not elevated; click '以管理员身份重启' first".to_string());
+        }
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe_str = exe.to_string_lossy().into_owned();
+        let output = std::process::Command::new("schtasks")
+            .args([
+                "/Create",
+                "/TN",
+                ADMIN_AUTOSTART_TASK,
+                "/TR",
+                &format!("\"{}\"", exe_str),
+                "/SC",
+                "ONLOGON",
+                "/RL",
+                "HIGHEST",
+                "/F",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(format!(
+                "schtasks /Create failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        Ok(())
+    } else {
+        let _ = std::process::Command::new("schtasks")
+            .args(["/Delete", "/TN", ADMIN_AUTOSTART_TASK, "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_admin_autostart(_enable: bool) -> Result<(), String> {
+    Err("admin autostart is Windows-only".to_string())
+}
+
+fn on_admin_autostart_click(app: &AppHandle) {
+    let currently_enabled = admin_autostart_enabled();
+    let target = !currently_enabled;
+    match set_admin_autostart(target) {
+        Ok(()) => {
+            let actual = admin_autostart_enabled();
+            info!("admin_autostart toggled to {} (verified={})", target, actual);
+            let _ = app
+                .tray_handle()
+                .get_item("admin_autostart")
+                .set_selected(actual);
+        }
+        Err(e) => {
+            warn!("admin_autostart toggle failed: {}", e);
+            let _ = app
+                .tray_handle()
+                .get_item("admin_autostart")
+                .set_selected(currently_enabled);
+        }
+    }
+}
+
 fn on_quit_click(app: &AppHandle) {
     app.global_shortcut_manager().unregister_all().unwrap();
     info!("============== Quit App ==============");
@@ -305,6 +398,7 @@ fn tray_menu_en() -> tauri::SystemTrayMenu {
     let view_log = CustomMenuItem::new("view_log", "View Log");
     let restart = CustomMenuItem::new("restart", "Restart");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Restart as Administrator");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Auto-start as Administrator");
     let quit = CustomMenuItem::new("quit", "Quit");
     SystemTrayMenu::new()
         .add_item(input_translate)
@@ -328,6 +422,7 @@ fn tray_menu_en() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -345,6 +440,7 @@ fn tray_menu_zh_cn() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "检查更新");
     let restart = CustomMenuItem::new("restart", "重启应用");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "以管理员身份重启");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "管理员开机自启");
     let view_log = CustomMenuItem::new("view_log", "查看日志");
     let quit = CustomMenuItem::new("quit", "退出");
     SystemTrayMenu::new()
@@ -369,6 +465,7 @@ fn tray_menu_zh_cn() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -386,6 +483,7 @@ fn tray_menu_zh_tw() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "檢查更新");
     let restart = CustomMenuItem::new("restart", "重啓程式");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "以管理員身份重啓");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "管理員開機自啟");
     let view_log = CustomMenuItem::new("view_log", "查看日誌");
     let quit = CustomMenuItem::new("quit", "退出");
     SystemTrayMenu::new()
@@ -410,6 +508,7 @@ fn tray_menu_zh_tw() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -427,6 +526,7 @@ fn tray_menu_ja() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "更新を確認する");
     let restart = CustomMenuItem::new("restart", "アプリの再起動");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "管理者として再起動");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "管理者として自動起動");
     let view_log = CustomMenuItem::new("view_log", "ログを見る");
     let quit = CustomMenuItem::new("quit", "退出する");
     SystemTrayMenu::new()
@@ -451,6 +551,7 @@ fn tray_menu_ja() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -468,6 +569,7 @@ fn tray_menu_ko() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "업데이트 확인");
     let restart = CustomMenuItem::new("restart", "응용 프로그램 다시 시작");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "관리자 권한으로 다시 시작");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "관리자 권한으로 자동 시작");
     let view_log = CustomMenuItem::new("view_log", "로그 보기");
     let quit = CustomMenuItem::new("quit", "퇴출");
     SystemTrayMenu::new()
@@ -492,6 +594,7 @@ fn tray_menu_ko() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -510,6 +613,7 @@ fn tray_menu_fr() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Vérifier les mises à jour");
     let restart = CustomMenuItem::new("restart", "Redémarrer l'application");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Redémarrer en tant qu'administrateur");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Démarrage auto en tant qu'administrateur");
     let view_log = CustomMenuItem::new("view_log", "Voir le journal");
     let quit = CustomMenuItem::new("quit", "Quitter");
     SystemTrayMenu::new()
@@ -534,6 +638,7 @@ fn tray_menu_fr() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 fn tray_menu_de() -> tauri::SystemTrayMenu {
@@ -550,6 +655,7 @@ fn tray_menu_de() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Auf Updates prüfen");
     let restart = CustomMenuItem::new("restart", "Anwendung neu starten");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Als Administrator neu starten");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Als Administrator automatisch starten");
     let view_log = CustomMenuItem::new("view_log", "Protokoll anzeigen");
     let quit = CustomMenuItem::new("quit", "Beenden");
     SystemTrayMenu::new()
@@ -574,6 +680,7 @@ fn tray_menu_de() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -591,6 +698,7 @@ fn tray_menu_ru() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Проверить обновления");
     let restart = CustomMenuItem::new("restart", "Перезапустить приложение");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Перезапустить от имени администратора");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Автозапуск от имени администратора");
     let view_log = CustomMenuItem::new("view_log", "Просмотр журнала");
     let quit = CustomMenuItem::new("quit", "Выход");
     SystemTrayMenu::new()
@@ -615,6 +723,7 @@ fn tray_menu_ru() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -632,6 +741,7 @@ fn tray_menu_fa() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "بررسی بروزرسانی");
     let restart = CustomMenuItem::new("restart", "راه‌اندازی مجدد برنامه");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "راه‌اندازی مجدد به‌عنوان مدیر");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "اجرای خودکار به‌عنوان مدیر");
     let view_log = CustomMenuItem::new("view_log", "مشاهده گزارشات");
     let quit = CustomMenuItem::new("quit", "خروج");
     SystemTrayMenu::new()
@@ -656,6 +766,7 @@ fn tray_menu_fa() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -674,6 +785,7 @@ fn tray_menu_pt_br() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Checar por Atualização");
     let restart = CustomMenuItem::new("restart", "Reiniciar aplicativo");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Reiniciar como administrador");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Iniciar automaticamente como administrador");
     let view_log = CustomMenuItem::new("view_log", "Exibir Registro");
     let quit = CustomMenuItem::new("quit", "Sair");
     SystemTrayMenu::new()
@@ -698,6 +810,7 @@ fn tray_menu_pt_br() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }
 
@@ -715,6 +828,7 @@ fn tray_menu_uk() -> tauri::SystemTrayMenu {
     let check_update = CustomMenuItem::new("check_update", "Перевірити оновлення");
     let restart = CustomMenuItem::new("restart", "Перезапустити додаток");
     let restart_as_admin = CustomMenuItem::new("restart_as_admin", "Перезапустити від імені адміністратора");
+    let admin_autostart = CustomMenuItem::new("admin_autostart", "Автозапуск від імені адміністратора");
     let view_log = CustomMenuItem::new("view_log", "Перегляд журналу");
     let quit = CustomMenuItem::new("quit", "Вихід");
     SystemTrayMenu::new()
@@ -739,5 +853,6 @@ fn tray_menu_uk() -> tauri::SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(restart)
         .add_item(restart_as_admin)
+        .add_item(admin_autostart)
         .add_item(quit)
 }

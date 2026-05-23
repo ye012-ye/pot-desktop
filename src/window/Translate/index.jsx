@@ -1,11 +1,11 @@
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
-import { appWindow, currentMonitor } from '@tauri-apps/api/window';
+import { appWindow, currentMonitor, LogicalSize } from '@tauri-apps/api/window';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 import { Spacer, Button } from '@nextui-org/react';
 import { AiFillCloseCircle } from 'react-icons/ai';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { BsPinFill } from 'react-icons/bs';
 
@@ -68,6 +68,7 @@ export default function Translate() {
     const [alwaysOnTop] = useConfig('translate_always_on_top', false);
     const [windowPosition] = useConfig('translate_window_position', 'mouse');
     const [rememberWindowSize] = useConfig('translate_remember_window_size', false);
+    const [autoFitHeight] = useConfig('translate_auto_fit_height', true);
     const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
         'deepl',
         'bing',
@@ -83,6 +84,7 @@ export default function Translate() {
     const [pined, setPined] = useState(false);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
+    const contentRef = useRef(null);
     const reorder = (list, startIndex, endIndex) => {
         const result = Array.from(list);
         const [removed] = result.splice(startIndex, 1);
@@ -148,6 +150,8 @@ export default function Translate() {
                         const monitor = await currentMonitor();
                         const factor = monitor.scaleFactor;
                         size = size.toLogical(factor);
+                        // 自适应开启时尺寸由内容决定，不持久化
+                        if (autoFitHeight) return;
                         await store.set('translate_window_height', parseInt(size.height));
                         await store.set('translate_window_width', parseInt(size.width));
                         await store.save();
@@ -160,7 +164,78 @@ export default function Translate() {
                 });
             };
         }
-    }, [rememberWindowSize]);
+    }, [rememberWindowSize, autoFitHeight]);
+
+    // 高度+宽度自适应内容
+    useEffect(() => {
+        if (autoFitHeight !== true) return;
+        if (!contentRef.current) return;
+
+        const HEADER = osType === 'Linux' ? 37 : 35;
+        const MIN_HEIGHT = 180;
+        const MIN_WIDTH = 260;
+        const MAX_WIDTH = 400;
+        const SCREEN_MARGIN = 80;
+        const H_PADDING = 32; // px-[8px] * 2 + scrollbar + border
+        let raf = null;
+        let lastH = 0;
+        let lastW = 0;
+        let measureCanvas = null;
+
+        const measureMaxTextWidth = (root) => {
+            if (!measureCanvas) measureCanvas = document.createElement('canvas');
+            const ctx = measureCanvas.getContext('2d');
+            const rootStyle = getComputedStyle(root);
+            const fontFamily = rootStyle.fontFamily || 'sans-serif';
+            let maxW = 0;
+            root.querySelectorAll('textarea').forEach((ta) => {
+                const v = ta.value || '';
+                if (!v) return;
+                const taStyle = getComputedStyle(ta);
+                const fontSize = parseFloat(taStyle.fontSize) || 16;
+                ctx.font = `${fontSize}px ${taStyle.fontFamily || fontFamily}`;
+                for (const line of v.split('\n')) {
+                    const w = ctx.measureText(line).width;
+                    if (w > maxW) maxW = w;
+                }
+            });
+            return maxW;
+        };
+
+        const apply = async () => {
+            raf = null;
+            if (appWindow.label !== 'translate') return;
+            if (!contentRef.current) return;
+            const contentH = contentRef.current.offsetHeight;
+            const textMaxW = measureMaxTextWidth(contentRef.current);
+            const monitor = await currentMonitor();
+            if (!monitor) return;
+            const factor = monitor.scaleFactor;
+            const monitorLogicalH = monitor.size.height / factor;
+            const monitorLogicalW = monitor.size.width / factor;
+            const maxH = Math.max(MIN_HEIGHT, monitorLogicalH - SCREEN_MARGIN);
+            const maxW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, monitorLogicalW - SCREEN_MARGIN));
+            const targetH = Math.min(Math.max(HEADER + contentH, MIN_HEIGHT), maxH);
+            const targetW = Math.min(Math.max(textMaxW + H_PADDING, MIN_WIDTH), maxW);
+            if (Math.abs(targetH - lastH) < 2 && Math.abs(targetW - lastW) < 2) return;
+            lastH = targetH;
+            lastW = targetW;
+            await appWindow.setSize(new LogicalSize(Math.round(targetW), Math.round(targetH)));
+        };
+
+        const schedule = () => {
+            if (raf) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(apply);
+        };
+
+        const observer = new ResizeObserver(schedule);
+        observer.observe(contentRef.current);
+
+        return () => {
+            observer.disconnect();
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [autoFitHeight, pluginList, serviceInstanceConfigMap]);
 
     const loadPluginList = async () => {
         const serviceTypeList = ['translate', 'tts', 'recognize', 'collection'];
@@ -276,19 +351,20 @@ export default function Translate() {
                 </div>
                 <div className={`${osType === 'Linux' ? 'h-[calc(100vh-37px)]' : 'h-[calc(100vh-35px)]'} px-[8px]`}>
                     <div className='h-full overflow-y-auto'>
-                        <div>
-                            {serviceInstanceConfigMap !== null && (
-                                <SourceArea
-                                    pluginList={pluginList}
-                                    serviceInstanceConfigMap={serviceInstanceConfigMap}
-                                />
-                            )}
-                        </div>
-                        <div className={`${hideLanguage && 'hidden'}`}>
-                            <LanguageArea />
-                            <Spacer y={2} />
-                        </div>
-                        <DragDropContext onDragEnd={onDragEnd}>
+                        <div ref={contentRef}>
+                            <div>
+                                {serviceInstanceConfigMap !== null && (
+                                    <SourceArea
+                                        pluginList={pluginList}
+                                        serviceInstanceConfigMap={serviceInstanceConfigMap}
+                                    />
+                                )}
+                            </div>
+                            <div className={`${hideLanguage && 'hidden'}`}>
+                                <LanguageArea />
+                                <Spacer y={1} />
+                            </div>
+                            <DragDropContext onDragEnd={onDragEnd}>
                             <Droppable
                                 droppableId='droppable'
                                 direction='vertical'
@@ -325,7 +401,7 @@ export default function Translate() {
                                                                     pluginList={pluginList}
                                                                     serviceInstanceConfigMap={serviceInstanceConfigMap}
                                                                 />
-                                                                <Spacer y={2} />
+                                                                <Spacer y={1} />
                                                             </div>
                                                         )}
                                                     </Draggable>
@@ -337,6 +413,7 @@ export default function Translate() {
                                 )}
                             </Droppable>
                         </DragDropContext>
+                        </div>
                     </div>
                 </div>
             </div>

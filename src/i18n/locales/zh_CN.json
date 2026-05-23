@@ -120,6 +120,7 @@
                 "window_position": "窗口位置",
                 "mouse": "跟随鼠标",
                 "pre_state": "记住位置",
+                "auto_fit_height": "窗口高度自适应内容",
                 "remember_window_size": "记住窗口大小",
                 "close_on_blur": "失去焦点时关闭窗口",
                 "always_on_top": "窗口默认置顶",
@@ -459,7 +460,9 @@
             "copy": "复制",
             "retry": "重试",
             "delete_newline": "删除换行",
-            "translate_back": "翻译回原文"
+            "translate_back": "翻译回原文",
+            "collapse": "收起原文",
+            "expand": "展开原文"
         },
         "recognize": {
             "recognize": "重新识别",

@@ -120,6 +120,7 @@
                 "window_position": "Window Position",
                 "mouse": "Follow the Mouse",
                 "pre_state": "Remember Position",
+                "auto_fit_height": "Auto-fit Window Height to Content",
                 "remember_window_size": "Remember Window Size",
                 "close_on_blur": "Close window when focus lost",
                 "always_on_top": "Always on Top",
@@ -459,7 +460,9 @@
             "copy": "Copy",
             "retry": "Try again",
             "delete_newline": "Delete Newline",
-            "translate_back": "Translation back to the original"
+            "translate_back": "Translation back to the original",
+            "collapse": "Collapse Source",
+            "expand": "Expand Source"
         },
         "recognize": {
             "recognize": "Recognize",

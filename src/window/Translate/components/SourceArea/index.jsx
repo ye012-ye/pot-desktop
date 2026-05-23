@@ -3,6 +3,7 @@ import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
+import { BiCollapseVertical, BiExpandVertical } from 'react-icons/bi';
 import { appWindow } from '@tauri-apps/api/window';
 import toast, { Toaster } from 'react-hot-toast';
 import { listen } from '@tauri-apps/api/event';
@@ -47,6 +48,7 @@ export default function SourceArea(props) {
     const [hideSource] = useConfig('hide_source', false);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
+    const [sourceCollapsed, setSourceCollapsed] = useState(true);
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
     const textAreaRef = useRef();
@@ -181,12 +183,12 @@ export default function SourceArea(props) {
                 newText = text.trim();
             }
             if (incrementalTranslate && !isInline && !lastInlineTranslateRef.current) {
-                setSourceText((old) => {
-                    return old + ' ' + newText;
-                });
+                setSourceText((old) => old + ' ' + newText);
             } else {
                 setSourceText(newText);
             }
+            // 新文本到达时始终回到 2 行收起态
+            setSourceCollapsed(true);
             if (!isInline) {
                 lastInlineTranslateRef.current = false;
             }
@@ -291,9 +293,14 @@ export default function SourceArea(props) {
     }, [deleteNewline, incrementalTranslate, recognizeLanguage, recognizeServiceList, hideWindow]);
 
     useEffect(() => {
-        textAreaRef.current.style.height = '50px';
-        textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
-    }, [sourceText]);
+        if (!textAreaRef.current) return;
+        if (sourceCollapsed) {
+            textAreaRef.current.style.height = '40px';
+        } else {
+            textAreaRef.current.style.height = '40px';
+            textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
+        }
+    }, [sourceText, sourceCollapsed]);
 
     const detect_language = async (text) => {
         setDetectLanguage(await detect(text));
@@ -479,6 +486,23 @@ export default function SourceArea(props) {
                                     <MdSmartButton className='text-[16px]' />
                                 </Button>
                             </Tooltip>
+                            <Tooltip content={t(sourceCollapsed ? 'translate.expand' : 'translate.collapse')}>
+                                <Button
+                                    variant='light'
+                                    size='sm'
+                                    isIconOnly
+                                    isDisabled={sourceText === ''}
+                                    onPress={() => {
+                                        setSourceCollapsed((v) => !v);
+                                    }}
+                                >
+                                    {sourceCollapsed ? (
+                                        <BiExpandVertical className='text-[16px]' />
+                                    ) : (
+                                        <BiCollapseVertical className='text-[16px]' />
+                                    )}
+                                </Button>
+                            </Tooltip>
                             <Tooltip content={t('common.clear')}>
                                 <Button
                                     variant='light'
@@ -521,7 +545,7 @@ export default function SourceArea(props) {
                     </Tooltip>
                 </CardFooter>
             </Card>
-            <Spacer y={2} />
+            <Spacer y={1} />
         </div>
     );
 }

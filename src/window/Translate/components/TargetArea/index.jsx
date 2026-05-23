@@ -410,9 +410,11 @@ export default function TargetArea(props) {
     };
 
     const [boundRef, bounds] = useMeasure({ scroll: true });
+    const hasContent =
+        (typeof result === 'string' ? result !== '' : result != null) || error !== '' || isLoading;
     const springs = useSpring({
         from: { height: 0 },
-        to: { height: hide ? 0 : bounds.height },
+        to: { height: hide || !hasContent ? 0 : bounds.height },
     });
 
     return (
@@ -537,7 +539,7 @@ export default function TargetArea(props) {
             <animated.div style={{ ...springs }}>
                 <div ref={boundRef}>
                     {/* result content */}
-                    <CardBody className={`p-[12px] pb-0 ${hide && 'h-0 p-0'}`}>
+                    <CardBody className={`p-[8px] pb-0 ${hide && 'h-0 p-0'}`}>
                         {typeof result === 'string' ? (
                             <textarea
                                 ref={textAreaRef}
@@ -671,7 +673,7 @@ export default function TargetArea(props) {
                         )}
                     </CardBody>
                     <CardFooter
-                        className={`bg-content1 rounded-none rounded-b-[10px] flex px-[12px] p-[5px] ${hide && 'hidden'}`}
+                        className={`bg-content1 rounded-none rounded-b-[10px] flex px-[8px] p-[3px] ${hide && 'hidden'}`}
                     >
                         <ButtonGroup>
                             {/* speak button */}

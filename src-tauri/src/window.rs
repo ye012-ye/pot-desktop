@@ -171,6 +171,12 @@ fn translate_window() -> Window {
         }
     }
 
+    let auto_fit = match get("translate_auto_fit_height") {
+        Some(v) => v.as_bool().unwrap_or(true),
+        None => true,
+    };
+    window.set_resizable(!auto_fit).unwrap();
+
     let position_type = match get("translate_window_position") {
         Some(v) => v.as_str().unwrap().to_string(),
         None => "mouse".to_string(),
@@ -302,6 +308,14 @@ fn read_selected_text() -> String {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
     use std::thread::sleep;
     use std::time::{Duration, Instant};
+
+    // Inject a synthetic F24 while the user's Alt is still held. This makes
+    // the Alt sequence "Alt+F24" instead of "Alt alone", which prevents
+    // Java AWT apps (JetBrains IDEs) from activating the menu bar on Alt
+    // release and playing a "ding" through Toolkit.beep().
+    if let Ok(mut e) = Enigo::new(&Settings::default()) {
+        let _ = e.key(Key::F24, Direction::Click);
+    }
 
     let wait_ms = wait_for_modifiers_released(500);
     let (fg_title, fg_class) = foreground_window_info();

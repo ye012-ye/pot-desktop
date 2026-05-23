@@ -27,6 +27,7 @@ export default function Translate() {
     // const [translateFontSize, setTranslateFontSize] = useConfig('translate_font_size', 16);
     const [windowPosition, setWindowPosition] = useConfig('translate_window_position', 'mouse');
     const [rememberWindowSize, setRememberWindowSize] = useConfig('translate_remember_window_size', false);
+    const [autoFitHeight, setAutoFitHeight] = useConfig('translate_auto_fit_height', true);
     const [hideSource, setHideSource] = useConfig('hide_source', false);
     const [hideLanguage, setHideLanguage] = useConfig('hide_language', false);
     const [hideWindow, setHideWindow] = useConfig('translate_hide_window', false);
@@ -260,6 +261,17 @@ export default function Translate() {
                                     <DropdownItem key='pre_state'>{t('config.translate.pre_state')}</DropdownItem>
                                 </DropdownMenu>
                             </Dropdown>
+                        )}
+                    </div>
+                    <div className='config-item'>
+                        <h3 className='my-auto mx-0'>{t('config.translate.auto_fit_height')}</h3>
+                        {autoFitHeight !== null && (
+                            <Switch
+                                isSelected={autoFitHeight}
+                                onValueChange={(v) => {
+                                    setAutoFitHeight(v);
+                                }}
+                            />
                         )}
                     </div>
                     <div className='config-item'>

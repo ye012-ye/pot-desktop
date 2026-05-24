@@ -22,14 +22,7 @@ export function Config(props) {
             stream: true,
             model: 'gemma:2b',
             requestPath: 'http://localhost:11434',
-            promptList: [
-                {
-                    role: 'system',
-                    content:
-                        'You are a professional translation engine, please translate the text into a colloquial, professional, elegant and fluent content, without the style of machine translation. You must only translate the text content, never interpret it.',
-                },
-                { role: 'user', content: `Translate into $to:\n"""\n$text\n"""` },
-            ],
+            promptList: [],
         },
         { sync: false }
     );

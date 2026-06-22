@@ -2,6 +2,7 @@ import { fetch, Body } from '@tauri-apps/api/http';
 import { Language } from './info';
 import { defaultRequestArguments } from './Config';
 import { ensureOllamaReady } from '../../../utils/ollama_warmup';
+import { createRequestHeaders } from './headers';
 
 function looksLikeOllamaEndpoint(path) {
     return /11434|ollama/i.test(path);
@@ -53,16 +54,7 @@ export async function translate(text, from, to, options) {
         };
     });
 
-    const headers =
-        service === 'openai'
-            ? {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${apiKey}`,
-              }
-            : {
-                  'Content-Type': 'application/json',
-                  'api-key': apiKey,
-              };
+    const headers = createRequestHeaders(service, apiKey);
     const body = {
         ...JSON.parse(requestArguments ?? defaultRequestArguments),
         stream: stream,

@@ -83,6 +83,7 @@ pub fn check_service_available() -> Result<(), Error> {
         "geminipro",
         "niutrans",
         "ollama",
+        "lmstudio",
         "openai",
         "google",
         "tencent",

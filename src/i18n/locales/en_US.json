@@ -276,6 +276,19 @@
                     "prompt_description": "By customizing the Prompt, you can customize the behavior of OpenAI. $text $from $to $detect will be replaced with the text to be translated, source language, target language and detected language.",
                     "add": "Add Prompt"
                 },
+                "lmstudio": {
+                    "title": "LM Studio",
+                    "base_url": "API Base URL",
+                    "api_key": "API Token (optional)",
+                    "model": "Model",
+                    "stream": "Stream Mode",
+                    "refresh_models": "Refresh Models",
+                    "model_loading": "Loading models...",
+                    "model_error": "Unable to load models; enter one manually",
+                    "model_required": "Select or enter a model first",
+                    "prompt_description": "Customize translation behavior with prompts. $text $from $to $detect are replaced with the text, source language, target language, and detected language.",
+                    "add": "Add Prompt"
+                },
                 "geminipro": {
                     "title": "Gemini Pro",
                     "request_path": "Request Path",

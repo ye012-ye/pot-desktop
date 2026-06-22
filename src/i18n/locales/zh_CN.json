@@ -276,6 +276,19 @@
                     "prompt_description": "通过自定义Prompt自定义OpenAI行为, $text $from $to $detect 将会被替换为 待翻译文本，源语言，目标语言和检测到的语言。",
                     "add": "添加 Prompt"
                 },
+                "lmstudio": {
+                    "title": "LM Studio",
+                    "base_url": "API 基础地址",
+                    "api_key": "API Token（可选）",
+                    "model": "模型",
+                    "stream": "流式输出",
+                    "refresh_models": "刷新模型",
+                    "model_loading": "正在读取模型...",
+                    "model_error": "无法读取模型，可手动填写",
+                    "model_required": "请先选择或填写模型",
+                    "prompt_description": "通过自定义 Prompt 调整翻译行为，$text $from $to $detect 会被替换为待翻译文本、源语言、目标语言和检测语言。",
+                    "add": "添加 Prompt"
+                },
                 "geminipro": {
                     "title": "Gemini Pro",
                     "request_path": "请求地址",

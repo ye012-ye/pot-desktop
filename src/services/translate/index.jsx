@@ -17,6 +17,7 @@ import * as _caiyun from './caiyun';
 import * as _chatglm from './chatglm';
 import * as _geminipro from './geminipro';
 import * as _ollama from './ollama';
+import * as _lmstudio from './lmstudio';
 import * as _ecdict from './ecdict';
 import * as _lingva from './lingva';
 
@@ -39,5 +40,6 @@ export const caiyun = _caiyun;
 export const chatglm = _chatglm;
 export const geminipro = _geminipro;
 export const ollama = _ollama;
+export const lmstudio = _lmstudio;
 export const ecdict = _ecdict;
 export const lingva = _lingva;

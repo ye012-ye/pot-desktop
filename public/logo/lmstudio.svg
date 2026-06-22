@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+    <title id="title">LM Studio</title>
+    <rect width="64" height="64" rx="14" fill="#15171a"/>
+    <path d="M14 17v30h20v-7H22V17z" fill="#f4f4f5"/>
+    <path d="M35 17h8l7 12 7-12h7v30h-8V30l-6 10-7-10v17h-8z" fill="#a7f3d0"/>
+</svg>

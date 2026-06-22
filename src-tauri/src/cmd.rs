@@ -272,6 +272,74 @@ pub fn start_ollama_serve() {
     info!("All ollama candidates failed; ollama may not be installed");
 }
 
+fn lmstudio_cli_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = vec![std::path::PathBuf::from("lms")];
+    if let Some(home_dir) = dirs::home_dir() {
+        #[cfg(target_os = "windows")]
+        candidates.push(home_dir.join(".lmstudio").join("bin").join("lms.exe"));
+        #[cfg(not(target_os = "windows"))]
+        candidates.push(home_dir.join(".lmstudio").join("bin").join("lms"));
+    }
+    candidates
+}
+
+fn lmstudio_server_command(executable: &std::path::Path, port: u16) -> std::process::Command {
+    use std::process::{Command, Stdio};
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut command = Command::new(executable);
+    command
+        .args(["server", "start", "--port", &port.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000 | 0x00000008);
+
+    command
+}
+
+#[tauri::command]
+pub fn start_lmstudio_server(port: u16) -> Result<(), Error> {
+    let mut last_error = None;
+    for executable in lmstudio_cli_candidates() {
+        match lmstudio_server_command(&executable, port).spawn() {
+            Ok(_) => {
+                info!(
+                    "Spawned LM Studio server on port {} via {:?}",
+                    port, executable
+                );
+                return Ok(());
+            }
+            Err(error) => {
+                info!("Skip {:?}: {}", executable, error);
+                last_error = Some(error);
+            }
+        }
+    }
+    Err(Error::Io(last_error.unwrap_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "LM Studio CLI was not found")
+    })))
+}
+
+#[cfg(test)]
+mod lmstudio_tests {
+    use super::lmstudio_server_command;
+    use std::path::Path;
+
+    #[test]
+    fn lmstudio_server_command_uses_requested_port() {
+        let command = lmstudio_server_command(Path::new("lms"), 1234);
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args, ["server", "start", "--port", "1234"]);
+    }
+}
+
 #[tauri::command]
 pub fn open_devtools(window: tauri::Window) {
     if !window.is_devtools_open() {

@@ -171,6 +171,7 @@ fn main() {
             install_plugin,
             font_list,
             start_ollama_serve,
+            start_lmstudio_server,
             aliyun
         ])
         .on_system_tray_event(tray_event_handler)

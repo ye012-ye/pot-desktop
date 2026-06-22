@@ -70,6 +70,28 @@ test('starts a local server after a failed probe and loads the configured model'
     assert.equal(loads, 1);
 });
 
+test('retries a transient model load failure', async () => {
+    let loads = 0;
+    let sleeps = 0;
+    const result = await ensureFirstLmStudioModel(
+        entries,
+        {
+            getModels: async () => ({ models: [{ key: 'hy-mt2-1.8b', loaded_instances: [] }] }),
+            startServer: async () => assert.fail('server is already reachable'),
+            loadModel: async () => {
+                loads++;
+                if (loads === 1) throw new Error('connection closed before message completed');
+            },
+            sleep: async () => sleeps++,
+        },
+        { loadAttempts: 2, intervalMs: 0 }
+    );
+
+    assert.equal(result.status, 'loaded');
+    assert.equal(loads, 2);
+    assert.equal(sleeps, 1);
+});
+
 test('does not start a local process for a remote server', async () => {
     const remote = [
         { instanceKey: 'lmstudio@remote', config: { baseUrl: 'https://models.example.com/v1', model: 'm' } },

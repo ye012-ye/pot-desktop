@@ -10,6 +10,7 @@ import {
     parseModelIds,
     toOpenAIConfig,
 } from './api.js';
+import { Language } from './language.js';
 
 test('normalizes LM Studio base URLs to one v1 segment', () => {
     assert.equal(normalizeBaseUrl('http://localhost:1234'), 'http://localhost:1234/v1');
@@ -69,4 +70,41 @@ test('uses Chinese default prompts for new LM Studio services', () => {
         { role: 'user', content: '把以下内容从 $from 翻译成 $to：$text' },
     ]);
     assert.ok(LM_STUDIO_DEFAULT_PROMPT_LIST.every(({ content }) => !/[\r\n]/.test(content)));
+});
+
+test('uses Chinese language names for LM Studio prompt variables', () => {
+    assert.deepEqual(Language, {
+        auto: '自动检测',
+        zh_cn: '简体中文',
+        zh_tw: '繁体中文',
+        yue: '粤语',
+        ja: '日语',
+        en: '英语',
+        ko: '韩语',
+        fr: '法语',
+        es: '西班牙语',
+        ru: '俄语',
+        de: '德语',
+        it: '意大利语',
+        tr: '土耳其语',
+        pt_pt: '葡萄牙语',
+        pt_br: '巴西葡萄牙语',
+        vi: '越南语',
+        id: '印度尼西亚语',
+        th: '泰语',
+        ms: '马来语',
+        ar: '阿拉伯语',
+        hi: '印地语',
+        mn_mo: '蒙古语',
+        mn_cy: '蒙古语（西里尔文）',
+        km: '高棉语',
+        nb_no: '书面挪威语',
+        nn_no: '新挪威语',
+        fa: '波斯语',
+        sv: '瑞典语',
+        pl: '波兰语',
+        nl: '荷兰语',
+        uk: '乌克兰语',
+        he: '希伯来语',
+    });
 });

@@ -42,6 +42,15 @@ export async function ensureFirstLmStudioModel(entries, dependencies, options = 
     if (!models) return { status: 'unreachable', entry, target };
     if (isModelLoaded(models, entry.config.model)) return { status: 'already-loaded', entry, target };
 
-    await dependencies.loadModel(entry, target);
+    const loadAttempts = options.loadAttempts ?? 3;
+    for (let attempt = 1; attempt <= loadAttempts; attempt++) {
+        try {
+            await dependencies.loadModel(entry, target);
+            break;
+        } catch (error) {
+            if (attempt === loadAttempts) throw error;
+            await dependencies.sleep(intervalMs);
+        }
+    }
     return { status: 'loaded', entry, target };
 }

@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "test": "node --test src/services/translate/lmstudio/api.test.js src/services/translate/openai/headers.test.js",
         "preview": "vite preview",
         "tauri": "tauri",
         "updater": "node updater/updater.mjs",

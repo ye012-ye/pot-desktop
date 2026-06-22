@@ -12,6 +12,7 @@ import { BsPinFill } from 'react-icons/bs';
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
 import TargetArea from './components/TargetArea';
+import { isFirstEnabledService } from './service_order';
 import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
@@ -379,6 +380,11 @@ export default function Translate() {
                                             translateServiceInstanceList.map((serviceInstanceKey, index) => {
                                                 const config = serviceInstanceConfigMap[serviceInstanceKey] ?? {};
                                                 const enable = config['enable'] ?? true;
+                                                const isPrimaryService = isFirstEnabledService(
+                                                    serviceInstanceKey,
+                                                    translateServiceInstanceList,
+                                                    serviceInstanceConfigMap
+                                                );
 
                                                 return enable ? (
                                                     <Draggable
@@ -395,6 +401,7 @@ export default function Translate() {
                                                                     {...provided.dragHandleProps}
                                                                     index={index}
                                                                     name={serviceInstanceKey}
+                                                                    isPrimaryService={isPrimaryService}
                                                                     translateServiceInstanceList={
                                                                         translateServiceInstanceList
                                                                     }

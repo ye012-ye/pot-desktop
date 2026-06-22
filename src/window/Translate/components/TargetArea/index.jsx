@@ -54,7 +54,15 @@ import {
 let translateID = [];
 
 export default function TargetArea(props) {
-    const { index, name, translateServiceInstanceList, pluginList, serviceInstanceConfigMap, ...drag } = props;
+    const {
+        index,
+        name,
+        isPrimaryService,
+        translateServiceInstanceList,
+        pluginList,
+        serviceInstanceConfigMap,
+        ...drag
+    } = props;
 
     const [currentTranslateServiceInstanceKey, setCurrentTranslateServiceInstanceKey] = useState(name);
     function getInstanceName(instanceKey, serviceNameSupplier) {
@@ -165,7 +173,7 @@ export default function TargetArea(props) {
     }
 
     const handleInlineTranslateResult = (value) => {
-        if (!inlineTranslate || index !== 0) {
+        if (!inlineTranslate || !isPrimaryService) {
             return;
         }
 

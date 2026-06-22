@@ -1,3 +1,8 @@
+export const LM_STUDIO_DEFAULT_PROMPT_LIST = [
+    { role: 'system', content: '你是专业翻译机器人，只输出准确、自然的译文，不要解释。' },
+    { role: 'user', content: '把以下内容从 $from 翻译成 $to：$text' },
+];
+
 export function normalizeBaseUrl(input) {
     let value = input.trim();
     if (!/^https?:\/\//i.test(value)) value = `http://${value}`;

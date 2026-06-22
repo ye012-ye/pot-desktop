@@ -5,6 +5,7 @@ import {
     createLmStudioHeaders,
     getChatCompletionsUrl,
     getModelsUrl,
+    LM_STUDIO_DEFAULT_PROMPT_LIST,
     normalizeBaseUrl,
     parseModelIds,
     toOpenAIConfig,
@@ -60,4 +61,12 @@ test('removes line breaks from LM Studio prompt templates', () => {
         { role: 'system', content: '专业翻译机器人' },
         { role: 'user', content: '把以下内容从 $from 翻译成 $to。$text' },
     ]);
+});
+
+test('uses Chinese default prompts for new LM Studio services', () => {
+    assert.deepEqual(LM_STUDIO_DEFAULT_PROMPT_LIST, [
+        { role: 'system', content: '你是专业翻译机器人，只输出准确、自然的译文，不要解释。' },
+        { role: 'user', content: '把以下内容从 $from 翻译成 $to：$text' },
+    ]);
+    assert.ok(LM_STUDIO_DEFAULT_PROMPT_LIST.every(({ content }) => !/[\r\n]/.test(content)));
 });

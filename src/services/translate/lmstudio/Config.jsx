@@ -9,17 +9,8 @@ import { useConfig } from '../../../hooks/useConfig';
 import { useToastStyle } from '../../../hooks';
 import { INSTANCE_NAME_CONFIG_KEY } from '../../../utils/service_instance';
 import { defaultRequestArguments } from '../openai/Config';
-import { createLmStudioHeaders, getModelsUrl, parseModelIds } from './api';
+import { createLmStudioHeaders, getModelsUrl, LM_STUDIO_DEFAULT_PROMPT_LIST, parseModelIds } from './api';
 import { Language, translate } from './index';
-
-const defaultPromptList = [
-    {
-        role: 'system',
-        content:
-            'You are a professional translation engine, please translate the text into a colloquial, professional, elegant and fluent content, without the style of machine translation. You must only translate the text content, never interpret it.',
-    },
-    { role: 'user', content: `Translate into $to:\n"""\n$text\n"""` },
-];
 
 export function Config(props) {
     const { instanceKey, updateServiceList, onClose } = props;
@@ -32,7 +23,7 @@ export function Config(props) {
             model: '',
             apiKey: '',
             stream: false,
-            promptList: defaultPromptList,
+            promptList: LM_STUDIO_DEFAULT_PROMPT_LIST,
             requestArguments: defaultRequestArguments,
         },
         { sync: false }

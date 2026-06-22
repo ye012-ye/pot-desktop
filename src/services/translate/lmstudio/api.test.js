@@ -46,3 +46,18 @@ test('adapts LM Studio configuration to the existing OpenAI provider', () => {
     assert.equal(config.requestPath, 'http://localhost:1234/v1/chat/completions');
     assert.equal(config.model, 'qwen');
 });
+
+test('removes line breaks from LM Studio prompt templates', () => {
+    const config = toOpenAIConfig({
+        baseUrl: 'http://localhost:1234',
+        promptList: [
+            { role: 'system', content: '专业翻译机器人\n\n' },
+            { role: 'user', content: '把以下内容从 \r\n$from \n翻译成 $to。\n\n$text' },
+        ],
+    });
+
+    assert.deepEqual(config.promptList, [
+        { role: 'system', content: '专业翻译机器人' },
+        { role: 'user', content: '把以下内容从 $from 翻译成 $to。$text' },
+    ]);
+});

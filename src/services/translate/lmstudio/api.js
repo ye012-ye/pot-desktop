@@ -36,6 +36,12 @@ export function parseModelIds(response) {
 export function toOpenAIConfig(config) {
     return {
         ...config,
+        ...(Array.isArray(config.promptList) && {
+            promptList: config.promptList.map((item) => ({
+                ...item,
+                content: item.content.replace(/[\r\n]/g, ''),
+            })),
+        }),
         service: 'openai',
         requestPath: getChatCompletionsUrl(config.baseUrl),
     };
